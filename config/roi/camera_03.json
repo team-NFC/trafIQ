@@ -1,0 +1,21 @@
+{
+    "camera_id": "camera_03",
+    "roi_type": "polygon",
+    "normalized": true,
+    "description": "TrafficIQ Deep Horizon Road Traffic Detection & Counting Zone (Extended Queue Coverage)",
+    "points": [
+        [0.44, 0.22],
+        [0.58, 0.22],
+        [0.66, 0.28],
+        [0.76, 0.40],
+        [0.88, 0.60],
+        [0.98, 0.80],
+        [0.99, 0.98],
+        [0.01, 0.98],
+        [0.05, 0.80],
+        [0.14, 0.60],
+        [0.24, 0.45],
+        [0.34, 0.32],
+        [0.40, 0.26]
+    ]
+}

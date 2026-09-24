@@ -1,0 +1,24 @@
+{
+  "source_video": "camera_01.mp4",
+  "total_extracted": 3,
+  "frames": [
+    {
+      "filename": "camera_01_f000000_t0.0s.jpg",
+      "frame_idx": 0,
+      "timestamp_sec": 0.0,
+      "path": "C:\\Users\\sanjeevi\\.gemini\\antigravity\\scratch\\TrafficIQ\\dataset\\images\\candidates\\camera_01_f000000_t0.0s.jpg"
+    },
+    {
+      "filename": "camera_01_f000029_t1.0s.jpg",
+      "frame_idx": 29,
+      "timestamp_sec": 0.97,
+      "path": "C:\\Users\\sanjeevi\\.gemini\\antigravity\\scratch\\TrafficIQ\\dataset\\images\\candidates\\camera_01_f000029_t1.0s.jpg"
+    },
+    {
+      "filename": "camera_01_f000058_t1.9s.jpg",
+      "frame_idx": 58,
+      "timestamp_sec": 1.94,
+      "path": "C:\\Users\\sanjeevi\\.gemini\\antigravity\\scratch\\TrafficIQ\\dataset\\images\\candidates\\camera_01_f000058_t1.9s.jpg"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+path: C:/Users/sanjeevi/.gemini/antigravity/scratch/TrafficIQ/dataset
+train: images/train
+val: images/val
+test: images/val
+
+names:
+  0: car
+  1: motorcycle
+  2: bus
+  3: truck
+  4: ambulance

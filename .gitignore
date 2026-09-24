@@ -1,0 +1,44 @@
+# Python Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
+
+# Frontend dependencies & build outputs
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+*.tsbuildinfo
+.vite/
+frontend/.vite/
+
+# Temporary run artifacts & debug outputs
+runs/*
+!runs/.gitkeep
+*.log
+
+# Large generated ANPR output videos (JSON, CSV, and source videos are tracked)
+anpr/output/*.mp4
+
+# OS & Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment variables
+.env
+.env.local
+.env.*.local

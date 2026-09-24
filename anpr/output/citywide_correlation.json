@@ -1,0 +1,293 @@
+{
+  "module": "TrafficIQ City-Wide Multi-Camera Vehicle Correlation",
+  "generated_at": "2026-09-21 11:29:24",
+  "camera_configuration": {
+    "camera_01": {
+      "location": "Junction A",
+      "start_time": "08:00:00",
+      "coordinates": [
+        13.0827,
+        80.2707
+      ]
+    },
+    "camera_02": {
+      "location": "Junction B",
+      "start_time": "08:05:00",
+      "coordinates": [
+        13.0865,
+        80.2745
+      ]
+    },
+    "camera_04": {
+      "location": "Junction D",
+      "start_time": "08:20:00",
+      "coordinates": [
+        13.0975,
+        80.289
+      ]
+    },
+    "camera_05": {
+      "location": "Additional City Camera",
+      "start_time": "08:25:00",
+      "coordinates": [
+        13.102,
+        80.295
+      ]
+    }
+  },
+  "summary": {
+    "total_vehicles_tracked": 5,
+    "multi_camera_correlations": 1,
+    "single_camera_vehicles": 4
+  },
+  "correlations": [
+    {
+      "vehicle": "TN45BB7890",
+      "plate_display": "TN 45 BB 7890",
+      "canonical_plate": "TN45BB7890",
+      "is_valid_indian_format": true,
+      "state_code": "TN",
+      "vehicle_class": "car",
+      "confidence": 0.996,
+      "avg_confidence": 0.996,
+      "cameras_detected_count": 3,
+      "cameras_visited": [
+        "camera_01",
+        "camera_02",
+        "camera_04"
+      ],
+      "first_seen_time": "08:00:02",
+      "last_seen_time": "08:20:02",
+      "total_journey_minutes": 20.0,
+      "total_journey_seconds": 1200,
+      "journey": [
+        {
+          "step_index": 1,
+          "camera": "camera_01",
+          "camera_name": "CAMERA 01",
+          "location": "Junction A",
+          "time": "08:00:02",
+          "video_timestamp_seconds": 2.96,
+          "frame": 71,
+          "vehicle_id": 1,
+          "confidence": 0.996,
+          "vehicle_class": "car",
+          "coordinates": [
+            13.0827,
+            80.2707
+          ]
+        },
+        {
+          "step_index": 2,
+          "camera": "camera_02",
+          "camera_name": "CAMERA 02",
+          "location": "Junction B",
+          "time": "08:05:02",
+          "video_timestamp_seconds": 2.96,
+          "frame": 71,
+          "vehicle_id": 1,
+          "confidence": 0.996,
+          "vehicle_class": "car",
+          "coordinates": [
+            13.0865,
+            80.2745
+          ]
+        },
+        {
+          "step_index": 3,
+          "camera": "camera_04",
+          "camera_name": "CAMERA 04",
+          "location": "Junction D",
+          "time": "08:20:02",
+          "video_timestamp_seconds": 2.96,
+          "frame": 71,
+          "vehicle_id": 1,
+          "confidence": 0.996,
+          "vehicle_class": "car",
+          "coordinates": [
+            13.0975,
+            80.289
+          ]
+        }
+      ],
+      "travel_times": [
+        {
+          "from_camera": "camera_01",
+          "from_camera_name": "CAMERA 01",
+          "from_location": "Junction A",
+          "to_camera": "camera_02",
+          "to_camera_name": "CAMERA 02",
+          "to_location": "Junction B",
+          "departure_time": "08:00:02",
+          "arrival_time": "08:05:02",
+          "travel_time_seconds": 300,
+          "travel_time_minutes": 5.0,
+          "temporal_anomaly": false
+        },
+        {
+          "from_camera": "camera_02",
+          "from_camera_name": "CAMERA 02",
+          "from_location": "Junction B",
+          "to_camera": "camera_04",
+          "to_camera_name": "CAMERA 04",
+          "to_location": "Junction D",
+          "departure_time": "08:05:02",
+          "arrival_time": "08:20:02",
+          "travel_time_seconds": 900,
+          "travel_time_minutes": 15.0,
+          "temporal_anomaly": false
+        }
+      ]
+    }
+  ],
+  "single_camera_vehicles": [
+    {
+      "vehicle": "AJ08HCH",
+      "plate_display": "AJ08HCH",
+      "canonical_plate": "AJ08HCH",
+      "is_valid_indian_format": false,
+      "state_code": null,
+      "vehicle_class": "car",
+      "confidence": 0.892,
+      "avg_confidence": 0.892,
+      "cameras_detected_count": 1,
+      "cameras_visited": [
+        "camera_05"
+      ],
+      "first_seen_time": "08:25:04",
+      "last_seen_time": "08:25:04",
+      "total_journey_minutes": 0.0,
+      "total_journey_seconds": 0,
+      "journey": [
+        {
+          "step_index": 1,
+          "camera": "camera_05",
+          "camera_name": "CAMERA 05",
+          "location": "Additional City Camera",
+          "time": "08:25:04",
+          "video_timestamp_seconds": 4.44,
+          "frame": 133,
+          "vehicle_id": 2,
+          "confidence": 0.892,
+          "vehicle_class": "car",
+          "coordinates": [
+            13.102,
+            80.295
+          ]
+        }
+      ],
+      "travel_times": []
+    },
+    {
+      "vehicle": "ST4YLOCALAPPLYN0W1",
+      "plate_display": "ST4YLOCALAPPLYN0W1",
+      "canonical_plate": "ST4YLOCALAPPLYN0W1",
+      "is_valid_indian_format": false,
+      "state_code": null,
+      "vehicle_class": "bus",
+      "confidence": 0.984,
+      "avg_confidence": 0.984,
+      "cameras_detected_count": 1,
+      "cameras_visited": [
+        "camera_05"
+      ],
+      "first_seen_time": "08:25:06",
+      "last_seen_time": "08:25:06",
+      "total_journey_minutes": 0.0,
+      "total_journey_seconds": 0,
+      "journey": [
+        {
+          "step_index": 1,
+          "camera": "camera_05",
+          "camera_name": "CAMERA 05",
+          "location": "Additional City Camera",
+          "time": "08:25:06",
+          "video_timestamp_seconds": 6.57,
+          "frame": 197,
+          "vehicle_id": 1,
+          "confidence": 0.984,
+          "vehicle_class": "bus",
+          "coordinates": [
+            13.102,
+            80.295
+          ]
+        }
+      ],
+      "travel_times": []
+    },
+    {
+      "vehicle": "OE56WAA",
+      "plate_display": "OE56WAA",
+      "canonical_plate": "OE56WAA",
+      "is_valid_indian_format": false,
+      "state_code": null,
+      "vehicle_class": "car",
+      "confidence": 0.895,
+      "avg_confidence": 0.895,
+      "cameras_detected_count": 1,
+      "cameras_visited": [
+        "camera_05"
+      ],
+      "first_seen_time": "08:25:09",
+      "last_seen_time": "08:25:09",
+      "total_journey_minutes": 0.0,
+      "total_journey_seconds": 0,
+      "journey": [
+        {
+          "step_index": 1,
+          "camera": "camera_05",
+          "camera_name": "CAMERA 05",
+          "location": "Additional City Camera",
+          "time": "08:25:09",
+          "video_timestamp_seconds": 9.28,
+          "frame": 278,
+          "vehicle_id": 4,
+          "confidence": 0.895,
+          "vehicle_class": "car",
+          "coordinates": [
+            13.102,
+            80.295
+          ]
+        }
+      ],
+      "travel_times": []
+    },
+    {
+      "vehicle": "LF18AYB",
+      "plate_display": "LF18AYB",
+      "canonical_plate": "LF18AYB",
+      "is_valid_indian_format": false,
+      "state_code": null,
+      "vehicle_class": "car",
+      "confidence": 0.927,
+      "avg_confidence": 0.927,
+      "cameras_detected_count": 1,
+      "cameras_visited": [
+        "camera_05"
+      ],
+      "first_seen_time": "08:25:22",
+      "last_seen_time": "08:25:22",
+      "total_journey_minutes": 0.0,
+      "total_journey_seconds": 0,
+      "journey": [
+        {
+          "step_index": 1,
+          "camera": "camera_05",
+          "camera_name": "CAMERA 05",
+          "location": "Additional City Camera",
+          "time": "08:25:22",
+          "video_timestamp_seconds": 22.46,
+          "frame": 673,
+          "vehicle_id": 56,
+          "confidence": 0.927,
+          "vehicle_class": "car",
+          "coordinates": [
+            13.102,
+            80.295
+          ]
+        }
+      ],
+      "travel_times": []
+    }
+  ]
+}

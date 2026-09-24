@@ -1,0 +1,25 @@
+{
+  "module": "TrafficIQ ANPR",
+  "video": "camera_02.mp4",
+  "total_frames_processed": 240,
+  "total_processing_time_seconds": 68.98,
+  "average_fps": 3.5,
+  "plate_detector_engine": "Adaptive Indian HSRP Morphological & Gradient Localizer",
+  "ocr_engine": "PaddleOCR 3.7.0",
+  "total_confirmed_plates": 1,
+  "confirmed_vehicles": [
+    {
+      "vehicle_id": 1,
+      "vehicle_class": "car",
+      "plate_number": "TN 45 BB 7890",
+      "raw_ocr_text": "TN45BB7890",
+      "normalized_plate": "TN45BB7890",
+      "confidence": 0.996,
+      "is_valid_indian_format": true,
+      "state_code": "TN",
+      "observations_count": 3,
+      "timestamp": "2.96s",
+      "confirmed_at_frame": 71
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+    "green_seconds": 20,
+    "yellow_seconds": 3,
+    "all_red_seconds": 2,
+    "sequence": [
+        "camera_01",
+        "camera_02",
+        "camera_03",
+        "camera_04"
+    ],
+    "default_mode": "NORMAL"
+}

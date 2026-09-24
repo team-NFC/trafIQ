@@ -1,0 +1,64 @@
+{
+  "module": "TrafficIQ ANPR",
+  "video": "camera_05.mp4",
+  "total_frames_processed": 705,
+  "total_processing_time_seconds": 250.17,
+  "average_fps": 2.8,
+  "plate_detector_engine": "Adaptive Indian HSRP Morphological & Gradient Localizer",
+  "ocr_engine": "PaddleOCR 3.7.0",
+  "total_confirmed_plates": 4,
+  "confirmed_vehicles": [
+    {
+      "vehicle_id": 2,
+      "vehicle_class": "car",
+      "plate_number": "AJ 08 HCH",
+      "raw_ocr_text": "AJOB HCH",
+      "normalized_plate": "AJ08HCH",
+      "confidence": 0.892,
+      "is_valid_indian_format": false,
+      "state_code": null,
+      "observations_count": 3,
+      "timestamp": "4.44s",
+      "confirmed_at_frame": 133
+    },
+    {
+      "vehicle_id": 1,
+      "vehicle_class": "bus",
+      "plate_number": "ST4YLOCALAPPLYN0W1",
+      "raw_ocr_text": "STAY LOCAL,APPLY NOWI",
+      "normalized_plate": "ST4YLOCALAPPLYN0W1",
+      "confidence": 0.984,
+      "is_valid_indian_format": false,
+      "state_code": null,
+      "observations_count": 3,
+      "timestamp": "6.57s",
+      "confirmed_at_frame": 197
+    },
+    {
+      "vehicle_id": 4,
+      "vehicle_class": "car",
+      "plate_number": "OE 56 WAA",
+      "raw_ocr_text": "OE56WAA",
+      "normalized_plate": "OE56WAA",
+      "confidence": 0.895,
+      "is_valid_indian_format": false,
+      "state_code": null,
+      "observations_count": 3,
+      "timestamp": "9.28s",
+      "confirmed_at_frame": 278
+    },
+    {
+      "vehicle_id": 56,
+      "vehicle_class": "car",
+      "plate_number": "LF 18 AYB",
+      "raw_ocr_text": "LFIB AYB",
+      "normalized_plate": "LF18AYB",
+      "confidence": 0.927,
+      "is_valid_indian_format": false,
+      "state_code": null,
+      "observations_count": 3,
+      "timestamp": "22.46s",
+      "confirmed_at_frame": 673
+    }
+  ]
+}

@@ -1,0 +1,2 @@
+vehicle_id,plate_number,confidence,is_valid_indian_format,state_code,observations_count,timestamp,confirmed_at_frame
+1,TN 45 BB 7890,0.996,True,TN,3,2.96s,71

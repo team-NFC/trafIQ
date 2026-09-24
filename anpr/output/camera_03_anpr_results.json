@@ -1,0 +1,38 @@
+{
+  "module": "TrafficIQ ANPR",
+  "video": "camera_03.mp4",
+  "total_frames_processed": 240,
+  "total_processing_time_seconds": 162.92,
+  "average_fps": 1.5,
+  "plate_detector_engine": "Adaptive Indian HSRP Morphological & Gradient Localizer",
+  "ocr_engine": "PaddleOCR 3.7.0",
+  "total_confirmed_plates": 2,
+  "confirmed_vehicles": [
+    {
+      "vehicle_id": 8,
+      "vehicle_class": "car",
+      "plate_number": "TN01W83430",
+      "raw_ocr_text": "TN01W83430",
+      "normalized_plate": "TN01W83430",
+      "confidence": 0.866,
+      "is_valid_indian_format": false,
+      "state_code": "TN",
+      "observations_count": 3,
+      "timestamp": "1.79s",
+      "confirmed_at_frame": 43
+    },
+    {
+      "vehicle_id": 2,
+      "vehicle_class": "car",
+      "plate_number": "7O43007000",
+      "raw_ocr_text": "7043007000",
+      "normalized_plate": "7O43007000",
+      "confidence": 0.989,
+      "is_valid_indian_format": false,
+      "state_code": null,
+      "observations_count": 3,
+      "timestamp": "8.29s",
+      "confirmed_at_frame": 199
+    }
+  ]
+}

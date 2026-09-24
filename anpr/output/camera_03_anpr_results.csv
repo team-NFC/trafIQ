@@ -1,0 +1,3 @@
+vehicle_id,vehicle_class,plate_number,confidence,is_valid_indian_format,state_code,observations_count,timestamp,confirmed_at_frame
+8,car,TN01W83430,0.866,False,TN,3,1.79s,43
+2,car,7O43007000,0.989,False,,3,8.29s,199

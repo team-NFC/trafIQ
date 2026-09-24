@@ -1,0 +1,35 @@
+{
+  "description": "TrafficIQ City-Wide CCTV Camera Synchronization & Location Mapping",
+  "cameras": {
+    "camera_01": {
+      "video": "camera_01.mp4",
+      "location": "Junction A",
+      "start_time": "08:00:00",
+      "coordinates": [13.0827, 80.2707]
+    },
+    "camera_02": {
+      "video": "camera_02.mp4",
+      "location": "Junction B",
+      "start_time": "08:05:00",
+      "coordinates": [13.0865, 80.2745]
+    },
+    "camera_03": {
+      "video": "camera_03.mp4",
+      "location": "Junction C",
+      "start_time": "08:10:00",
+      "coordinates": [13.0910, 80.2812]
+    },
+    "camera_04": {
+      "video": "camera_04.mp4",
+      "location": "Junction D",
+      "start_time": "08:20:00",
+      "coordinates": [13.0975, 80.2890]
+    },
+    "camera_05": {
+      "video": "camera_05.mp4",
+      "location": "Additional City Camera",
+      "start_time": "08:25:00",
+      "coordinates": [13.1020, 80.2950]
+    }
+  }
+}
