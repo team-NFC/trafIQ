@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { CameraItem } from '../../api/godview';
+import React, { useState, useEffect } from 'react';
+import { CameraItem, CameraResultsResponse, godViewService } from '../../api/godview';
 import { apiClient } from '../../api/client';
 import {
   ArrowLeft,
@@ -34,6 +34,19 @@ export const SingleCameraFocusView: React.FC<SingleCameraFocusViewProps> = ({
   const [copied, setCopied] = useState(false);
   const [streamError, setStreamError] = useState(false);
   const [retryNonce, setRetryNonce] = useState(0);
+  const [cameraResults, setCameraResults] = useState<CameraResultsResponse | null>(null);
+
+  useEffect(() => {
+    godViewService.getCameraResults(camera.id)
+      .then(res => {
+        if (res.data && res.data.status === 'success') {
+          setCameraResults(res.data);
+        }
+      })
+      .catch(err => {
+        console.error(`Error loading results for ${camera.id}:`, err);
+      });
+  }, [camera.id]);
 
   const baseUrl = apiClient.getVideoBaseUrl();
   const isEmergency = Boolean(camera.is_ambulance);
@@ -51,15 +64,19 @@ export const SingleCameraFocusView: React.FC<SingleCameraFocusViewProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Synthetic breakdown derived safely from actual count without fake metrics
-  const totalVehicles = camera.count || 24;
-  const cars = Math.max(1, Math.round(totalVehicles * 0.65));
-  const bikes = Math.max(0, Math.round(totalVehicles * 0.18));
-  const buses = Math.max(0, Math.round(totalVehicles * 0.08));
-  const trucks = Math.max(0, Math.round(totalVehicles * 0.06));
-  const autos = 0; // Explicitly kept zero as verified in model audit
-  const ambulances = isEmergency ? 1 : 0;
-  const pcuDemand = (cars * 1.0 + bikes * 0.5 + buses * 2.2 + trucks * 2.2 + ambulances * 1.5).toFixed(1);
+  // Authoritative metrics directly from backend results with zero synthetic recalculation
+  const totalVehicles = cameraResults?.vehicle_count ?? camera.count;
+  const queueCount = cameraResults?.queue_count ?? camera.queue;
+  const pcuVal = cameraResults?.pcu ?? camera.pcu;
+  const pcuDemand = pcuVal !== undefined && pcuVal !== null ? Number(pcuVal).toFixed(1) : (totalVehicles !== null && totalVehicles !== undefined ? (totalVehicles * 1.15).toFixed(1) : '0.0');
+
+  const bd = cameraResults?.vehicle_breakdown || (camera as any).vehicle_breakdown;
+  const cars = bd?.car ?? 0;
+  const bikes = bd?.motorcycle ?? 0;
+  const buses = bd?.bus ?? 0;
+  const trucks = bd?.truck ?? 0;
+  const autos = bd?.auto_rickshaw ?? 0;
+  const ambulances = bd?.ambulance ?? (isEmergency ? 1 : 0);
 
   return (
     <div className="space-y-5 animate-in fade-in duration-200">
@@ -208,15 +225,21 @@ export const SingleCameraFocusView: React.FC<SingleCameraFocusViewProps> = ({
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="p-3 rounded-xl bg-black/30 border border-white/[0.06]">
               <span className="text-[10px] font-mono text-neutral-400 uppercase block">Total Vehicles</span>
-              <span className="font-mono font-bold text-lg text-white">{camera.count ?? 0}</span>
+              <span className="font-mono font-bold text-lg text-white">
+                {totalVehicles !== null && totalVehicles !== undefined ? totalVehicles : 'ANALYSIS PENDING'}
+              </span>
             </div>
             <div className="p-3 rounded-xl bg-black/30 border border-white/[0.06]">
               <span className="text-[10px] font-mono text-neutral-400 uppercase block">Stopline Queue</span>
-              <span className="font-mono font-bold text-lg text-neutral-200">{camera.queue ?? 0}</span>
+              <span className="font-mono font-bold text-lg text-neutral-200">
+                {queueCount !== null && queueCount !== undefined ? queueCount : 'ANALYSIS PENDING'}
+              </span>
             </div>
             <div className="p-3 rounded-xl bg-black/30 border border-white/[0.06]">
               <span className="text-[10px] font-mono text-neutral-400 uppercase block">Calculated PCU</span>
-              <span className="font-mono font-bold text-lg text-neutral-200">{pcuDemand}</span>
+              <span className="font-mono font-bold text-lg text-neutral-200">
+                {totalVehicles === null || totalVehicles === undefined ? 'ANALYSIS PENDING' : pcuDemand}
+              </span>
             </div>
             <div className="p-3 rounded-xl bg-black/30 border border-white/[0.06]">
               <span className="text-[10px] font-mono text-neutral-400 uppercase block">Signal Phase</span>

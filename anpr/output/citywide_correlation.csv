@@ -2,6 +2,8 @@ plate,camera,location,detection_time,previous_camera,travel_time_minutes,vehicle
 TN 45 BB 7890,CAMERA 01,Junction A,08:00:02,,,car,0.996
 TN 45 BB 7890,CAMERA 02,Junction B,08:05:02,CAMERA 01,5,car,0.996
 TN 45 BB 7890,CAMERA 04,Junction D,08:20:02,CAMERA 02,15,car,0.996
+TN01W83430,CAMERA 03,Junction C,08:10:01,,,car,0.866
+7O43007000,CAMERA 03,Junction C,08:10:08,,,car,0.989
 AJ08HCH,CAMERA 05,Additional City Camera,08:25:04,,,car,0.892
 ST4YLOCALAPPLYN0W1,CAMERA 05,Additional City Camera,08:25:06,,,bus,0.984
 OE56WAA,CAMERA 05,Additional City Camera,08:25:09,,,car,0.895

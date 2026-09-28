@@ -4,17 +4,17 @@
   "total_confirmed_plates": 1,
   "confirmed_vehicles": [
     {
-      "vehicle_id": 7,
-      "vehicle_class": "ambulance",
-      "plate_number": "TN 45 AU 4608",
-      "normalized_plate": "TN45AU4608",
+      "vehicle_id": 1,
+      "vehicle_class": "car",
+      "plate_number": "TN 45 BB 7890",
+      "normalized_plate": "TN45BB7890",
       "confidence": 0.995,
       "is_valid_indian_format": true,
       "state_code": "TN",
-      "speed_kmh": 68.2,
+      "speed_kmh": 43.5,
       "timestamp": "2.96s"
     }
   ],
-  "primary_plate": "TN 45 AU 4608",
-  "processed_at": "2026-09-27 22:36:41"
+  "primary_plate": "TN 45 BB 7890",
+  "processed_at": "2026-09-28 14:10:00"
 }

@@ -9,6 +9,13 @@ export interface PlateObservation {
   isValidIndian: boolean;
   frameIndex?: number;
   speedEstimateKmh?: number;
+  plateNumber?: string;
+  canonicalPlate?: string;
+  isDatabaseMatch?: boolean;
+  caseNumber?: string;
+  status?: string;
+  ownerName?: string;
+  statusDisplay?: string;
 }
 
 export interface VehicleJourney {

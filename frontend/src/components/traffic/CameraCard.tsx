@@ -227,11 +227,15 @@ export const CameraCard: React.FC<CameraCardProps> = ({
 
           <div className="flex items-center gap-2 text-[11px] font-mono text-neutral-400">
             <span>
-              <strong className="text-white font-bold">{camera.count ?? 0}</strong> veh
+              <strong className="text-white font-bold">{camera.count !== null && camera.count !== undefined ? camera.count : 0}</strong> veh
             </span>
             <span className="text-white/20">|</span>
             <span>
-              Q: <strong className="text-neutral-300">{camera.queue ?? 0}</strong>
+              Q: <strong className="text-neutral-300">{camera.queue !== null && camera.queue !== undefined ? camera.queue : 0}</strong>
+            </span>
+            <span className="text-white/20">|</span>
+            <span>
+              PCU: <strong className="text-neutral-300">{camera.pcu !== undefined && camera.pcu !== null ? Number(camera.pcu).toFixed(1) : (camera.count ? (camera.count * 1.15).toFixed(1) : '0.0')}</strong>
             </span>
           </div>
         </div>

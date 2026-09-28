@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { PlateObservation } from '../../types/anpr';
-import { Search, Filter, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { Search, Filter, ShieldCheck } from 'lucide-react';
 
 interface PlateReadsTableProps {
   observations: PlateObservation[];
@@ -51,7 +51,7 @@ export const PlateReadsTable: React.FC<PlateReadsTableProps> = ({
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
           </div>
 
-          {/* Camera filter */}
+            {/* Camera filter */}
           <div className="flex items-center gap-1">
             <Filter className="w-3.5 h-3.5 text-slate-400" />
             <select
@@ -60,11 +60,9 @@ export const PlateReadsTable: React.FC<PlateReadsTableProps> = ({
               className="h-8 px-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-slate-300 focus:outline-none"
             >
               <option value="ALL">All CAMs</option>
-              <option value="CAM 01">CAM 01</option>
-              <option value="CAM 02">CAM 02</option>
-              <option value="CAM 03">CAM 03</option>
-              <option value="CAM 04">CAM 04</option>
-              <option value="CAM 05">CAM 05</option>
+              {Array.from(new Set(observations.map(o => o.cameraName))).sort().map(cName => (
+                <option key={cName} value={cName}>{cName}</option>
+              ))}
             </select>
           </div>
         </div>
@@ -81,7 +79,7 @@ export const PlateReadsTable: React.FC<PlateReadsTableProps> = ({
               <th className="py-3 px-4">Location</th>
               <th className="py-3 px-4">Timestamp</th>
               <th className="py-3 px-4">OCR Confidence</th>
-              <th className="py-3 px-4 text-right">Watchlist Status</th>
+              <th className="py-3 px-4 text-right">Database Status</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/60 font-mono">
@@ -93,16 +91,17 @@ export const PlateReadsTable: React.FC<PlateReadsTableProps> = ({
               </tr>
             ) : (
               filtered.map((obs, idx) => {
-                const isWatchlist = obs.cameraId === 'cam04' && obs.vehicleClass === 'Car';
+                const plateText = obs.plateNumber || 'TN 45 BB 7890';
                 return (
                   <tr
                     key={idx}
                     className="hover:bg-slate-900/50 transition cursor-pointer"
-                    onClick={() => onSelectPlate && onSelectPlate('TN45BB7890')}
+                    onClick={() => onSelectPlate && onSelectPlate(plateText)}
+                    title={`Click to track ${plateText} in 3D Camera Tracking`}
                   >
                     <td className="py-3 px-4 font-bold text-yellow-300">
-                      <span className="bg-slate-900 px-2 py-0.5 rounded border border-slate-700">
-                        TN45BB7890
+                      <span className="bg-slate-900 px-2 py-0.5 rounded border border-slate-700 hover:border-cyan-400 hover:text-cyan-300 transition">
+                        {plateText}
                       </span>
                     </td>
                     <td className="py-3 px-4 text-slate-300 font-sans">{obs.vehicleClass}</td>
@@ -115,15 +114,14 @@ export const PlateReadsTable: React.FC<PlateReadsTableProps> = ({
                       {(obs.confidence * 100).toFixed(1)}%
                     </td>
                     <td className="py-3 px-4 text-right">
-                      {isWatchlist ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-red-950/70 border border-red-500/40 text-red-300 text-[10px] font-sans font-bold">
-                          <AlertTriangle className="w-3 h-3 text-red-400" />
-                          DATABASE MATCH
+                      {obs.isDatabaseMatch ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-950/70 border border-emerald-500/40 text-emerald-300 text-[10px] font-sans font-bold">
+                          <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                          <span>{obs.statusDisplay || 'VERIFIED / DATABASE MATCH'}</span>
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-[10px] font-sans font-semibold">
-                          <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                          Clear
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-slate-400 text-[10px] font-sans font-medium">
+                          DETECTED PLATE — NOT IN UPLOADED DATABASE
                         </span>
                       )}
                     </td>

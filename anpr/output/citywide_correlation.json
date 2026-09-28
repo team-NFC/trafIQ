@@ -1,6 +1,6 @@
 {
   "module": "TrafficIQ City-Wide Multi-Camera Vehicle Correlation",
-  "generated_at": "2026-09-21 11:29:24",
+  "generated_at": "2026-09-28 14:57:43",
   "camera_configuration": {
     "camera_01": {
       "location": "Junction A",
@@ -16,6 +16,14 @@
       "coordinates": [
         13.0865,
         80.2745
+      ]
+    },
+    "camera_03": {
+      "location": "Junction C",
+      "start_time": "08:10:00",
+      "coordinates": [
+        13.091,
+        80.2812
       ]
     },
     "camera_04": {
@@ -36,9 +44,9 @@
     }
   },
   "summary": {
-    "total_vehicles_tracked": 5,
+    "total_vehicles_tracked": 7,
     "multi_camera_correlations": 1,
-    "single_camera_vehicles": 4
+    "single_camera_vehicles": 6
   },
   "correlations": [
     {
@@ -141,6 +149,80 @@
     }
   ],
   "single_camera_vehicles": [
+    {
+      "vehicle": "TN01W83430",
+      "plate_display": "TN01W83430",
+      "canonical_plate": "TN01W83430",
+      "is_valid_indian_format": false,
+      "state_code": "TN",
+      "vehicle_class": "car",
+      "confidence": 0.866,
+      "avg_confidence": 0.866,
+      "cameras_detected_count": 1,
+      "cameras_visited": [
+        "camera_03"
+      ],
+      "first_seen_time": "08:10:01",
+      "last_seen_time": "08:10:01",
+      "total_journey_minutes": 0.0,
+      "total_journey_seconds": 0,
+      "journey": [
+        {
+          "step_index": 1,
+          "camera": "camera_03",
+          "camera_name": "CAMERA 03",
+          "location": "Junction C",
+          "time": "08:10:01",
+          "video_timestamp_seconds": 1.79,
+          "frame": 43,
+          "vehicle_id": 8,
+          "confidence": 0.866,
+          "vehicle_class": "car",
+          "coordinates": [
+            13.091,
+            80.2812
+          ]
+        }
+      ],
+      "travel_times": []
+    },
+    {
+      "vehicle": "7O43007000",
+      "plate_display": "7O43007000",
+      "canonical_plate": "7O43007000",
+      "is_valid_indian_format": false,
+      "state_code": null,
+      "vehicle_class": "car",
+      "confidence": 0.989,
+      "avg_confidence": 0.989,
+      "cameras_detected_count": 1,
+      "cameras_visited": [
+        "camera_03"
+      ],
+      "first_seen_time": "08:10:08",
+      "last_seen_time": "08:10:08",
+      "total_journey_minutes": 0.0,
+      "total_journey_seconds": 0,
+      "journey": [
+        {
+          "step_index": 1,
+          "camera": "camera_03",
+          "camera_name": "CAMERA 03",
+          "location": "Junction C",
+          "time": "08:10:08",
+          "video_timestamp_seconds": 8.29,
+          "frame": 199,
+          "vehicle_id": 2,
+          "confidence": 0.989,
+          "vehicle_class": "car",
+          "coordinates": [
+            13.091,
+            80.2812
+          ]
+        }
+      ],
+      "travel_times": []
+    },
     {
       "vehicle": "AJ08HCH",
       "plate_display": "AJ08HCH",

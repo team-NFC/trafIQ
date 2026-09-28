@@ -31,14 +31,16 @@ import {
 } from 'lucide-react';
 
 export const CameraTrackingPage: React.FC = () => {
-  const { setCurrentPage, setSearchedPlate } = useApp();
+  const { setCurrentPage, setSearchedPlate, searchedPlate } = useApp();
+
+  const initialPlate = searchedPlate || 'TN 45 BB 7890';
 
   // Active tracked vehicles list
   const [trackedVehicles, setTrackedVehicles] = useState<TrackedVehicleSummary[]>([]);
-  const [selectedVehiclePlate, setSelectedVehiclePlate] = useState<string>('TN 45 BB 7890');
+  const [selectedVehiclePlate, setSelectedVehiclePlate] = useState<string>(initialPlate);
 
   // Search input state
-  const [searchQuery, setSearchQuery] = useState<string>('TN 45 BB 7890');
+  const [searchQuery, setSearchQuery] = useState<string>(initialPlate);
   const [timeRangeFilter, setTimeRangeFilter] = useState<string>('all');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -153,10 +155,15 @@ export const CameraTrackingPage: React.FC = () => {
 
         // Center map on corridor
         flyToCorridor(normalizedSeq);
+      } else if (res.data && (res.data.status as any) === 'in_database_unobserved') {
+        setTrackingDetail(null);
+        setErrorMsg(res.data.message || "Authorized vehicle in database — No camera detections recorded");
       } else {
-        setErrorMsg(res.data?.message || `No tracking history found for "${queryToSearch}"`);
+        setTrackingDetail(null);
+        setErrorMsg(res.data?.message || `No matching vehicle found for "${queryToSearch}"`);
       }
     } catch (err: any) {
+      setTrackingDetail(null);
       setErrorMsg(err.message || 'Error communicating with tracking service');
     } finally {
       setIsLoading(false);
@@ -179,10 +186,13 @@ export const CameraTrackingPage: React.FC = () => {
     controllerRef.current.flyTo(avgLat, avgLng, 3800, 0, -50, 1.8);
   };
 
-  // Initial load with default sample
+  // Initial load and react to context changes
   useEffect(() => {
-    executeSearch('TN 45 BB 7890');
-  }, []);
+    const target = searchedPlate || 'TN 45 BB 7890';
+    setSearchQuery(target);
+    setSelectedVehiclePlate(target);
+    executeSearch(target);
+  }, [searchedPlate]);
 
   // Switch to a specific tracked vehicle
   const handleSelectVehicle = (v: TrackedVehicleSummary) => {
@@ -591,6 +601,9 @@ export const CameraTrackingPage: React.FC = () => {
                               <span className="text-[10px] font-normal text-slate-400">
                                 ({step.camera_name})
                               </span>
+                              {isMissing && (
+                                <span className="text-amber-400 font-bold ml-1">— NOT DETECTED</span>
+                              )}
                             </div>
                             <div className="text-[11px] text-slate-300 font-sans mt-0.5">
                               {step.location}

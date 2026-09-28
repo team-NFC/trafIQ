@@ -100,14 +100,35 @@ export const PlateSearchPage: React.FC = () => {
           <JourneyTimeline journey={journey} />
 
           {/* Observation Log Table */}
-          <PlateReadsTable observations={journey.observations} />
+          <PlateReadsTable
+            observations={journey.observations}
+            onSelectPlate={(plate) => {
+              setSearchedPlate(plate);
+              setCurrentPage('camera_tracking');
+            }}
+          />
+        </div>
+      ) : journey && (journey as any).status === 'in_database_unobserved' ? (
+        <div className="p-8 rounded-xl border border-blue-500/30 bg-[#090d16] text-center space-y-3">
+          <div className="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-400 flex items-center justify-center mx-auto">
+            <Search className="w-6 h-6" />
+          </div>
+          <h3 className="text-base font-bold text-white">Authorized Vehicle in Database</h3>
+          <p className="text-xs text-slate-400 max-w-md mx-auto">
+            Authorized vehicle in database — No camera detections recorded
+          </p>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-slate-900 border border-slate-700 text-xs font-mono text-cyan-300">
+            <span>Plate: {searchedText}</span>
+            <span>•</span>
+            <span>Status: Authorized Database Record</span>
+          </div>
         </div>
       ) : (
         <EmptyState
           title="Vehicle Not Found in Active ANPR Index"
-          message={`No camera observations recorded for plate "${searchedText}". Try searching a sample plate such as TN45BB7890 or DL01AB1234.`}
+          message={`No camera observations or database records found for plate "${searchedText}".`}
           icon={AlertCircle}
-          actionText="Search Sample TN45BB7890"
+          actionText="Search TN45BB7890"
           onAction={() => executeSearch('TN45BB7890')}
         />
       )}

@@ -1,20 +1,9 @@
 {
   "camera_id": "CAM-11",
   "video_file": "CAM-11.mp4",
-  "total_confirmed_plates": 1,
-  "confirmed_vehicles": [
-    {
-      "vehicle_id": 1,
-      "vehicle_class": "car",
-      "plate_number": "TN 45 BB 7890",
-      "normalized_plate": "TN45BB7890",
-      "confidence": 0.995,
-      "is_valid_indian_format": true,
-      "state_code": "TN",
-      "speed_kmh": 42.0,
-      "timestamp": "2.96s"
-    }
-  ],
-  "primary_plate": "TN 45 BB 7890",
+  "total_confirmed_plates": 0,
+  "confirmed_vehicles": [],
+  "primary_plate": null,
+  "status": "NOT DETECTED",
   "processed_at": "2026-09-27 22:36:42"
 }

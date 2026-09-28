@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { anprService, CityWideCorrelationSummary } from '../api/anpr';
 import { ANPRCameraSummary, PlateObservation } from '../types/anpr';
@@ -6,7 +6,8 @@ import { ANPRCameraCard } from '../components/anpr/ANPRCameraCard';
 import { PlateSearchBox } from '../components/anpr/PlateSearchBox';
 import { PlateReadsTable } from '../components/anpr/PlateReadsTable';
 import { StatCard } from '../components/common/StatCard';
-import { ScanLine, Layers, Route, Eye, RefreshCw } from 'lucide-react';
+import { ScanLine, Layers, Route, Eye, RefreshCw, UploadCloud, CheckCircle2 } from 'lucide-react';
+import { apiClient } from '../api/client';
 
 export const ANPRDashboard: React.FC = () => {
   const { isDemoMode, setCurrentPage, setSearchedPlate } = useApp();
@@ -14,6 +15,9 @@ export const ANPRDashboard: React.FC = () => {
   const [recentReads, setRecentReads] = useState<PlateObservation[]>([]);
   const [summary, setSummary] = useState<CityWideCorrelationSummary | null>(null);
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchANPRData = async () => {
     setLoading(true);
@@ -33,13 +37,50 @@ export const ANPRDashboard: React.FC = () => {
     fetchANPRData();
   }, [isDemoMode]);
 
-  const handleSearch = (plate: string) => {
+  const handleSelectPlateForTracking = (plate: string) => {
     setSearchedPlate(plate);
-    setCurrentPage('anpr_search');
+    setCurrentPage('camera_tracking');
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setUploadMsg(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`${apiClient.getBaseUrl()}/api/anpr/upload-csv`, {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setUploadMsg(`✓ Successfully imported ${data.imported ?? data.total_cases ?? 0} authorized vehicle records from CSV`);
+        fetchANPRData();
+      } else {
+        setUploadMsg(`⚠ Upload failed: ${data.detail || 'Invalid CSV format'}`);
+      }
+    } catch (err: any) {
+      setUploadMsg(`⚠ Upload error: ${err.message}`);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      setTimeout(() => setUploadMsg(null), 6000);
+    }
   };
 
   return (
     <div className="space-y-6">
+      {/* Hidden CSV File Input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".csv,.txt"
+        onChange={handleFileUpload}
+        className="hidden"
+      />
+
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
@@ -52,17 +93,49 @@ export const ANPRDashboard: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={fetchANPRData}
-          className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-300 hover:text-white flex items-center gap-2 cursor-pointer self-start sm:self-auto"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          <span>Sync ANPR</span>
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="px-3 py-1.5 rounded-lg bg-purple-900/40 border border-purple-500/40 text-xs text-purple-200 hover:bg-purple-800/50 hover:text-white flex items-center gap-1.5 cursor-pointer transition disabled:opacity-50"
+            title="Upload CSV to match detected plates against authorized database"
+          >
+            <UploadCloud className="w-3.5 h-3.5" />
+            <span>{uploading ? 'Importing CSV...' : 'Upload Database CSV'}</span>
+          </button>
+
+          <button
+            onClick={fetchANPRData}
+            className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-300 hover:text-white flex items-center gap-2 cursor-pointer transition"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <span>Sync ANPR</span>
+          </button>
+        </div>
       </div>
 
+      {/* Upload Confirmation Alert Banner */}
+      {uploadMsg && (
+        <div className={`p-3 rounded-xl border text-xs font-mono flex items-center justify-between transition-all ${
+          uploadMsg.startsWith('✓')
+            ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
+            : 'bg-rose-950/40 border-rose-500/40 text-rose-300'
+        }`}>
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <span>{uploadMsg}</span>
+          </div>
+          <button
+            onClick={() => setUploadMsg(null)}
+            className="text-xs opacity-60 hover:opacity-100 cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Top Search Box */}
-      <PlateSearchBox onSearch={handleSearch} isLoading={loading} />
+      <PlateSearchBox onSearch={handleSelectPlateForTracking} isLoading={loading} />
 
       {/* ANPR Telemetry Summary KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
@@ -112,7 +185,7 @@ export const ANPRDashboard: React.FC = () => {
             <ANPRCameraCard
               key={cam.cameraId}
               camera={cam}
-              onSelectPlate={handleSearch}
+              onSelectPlate={handleSelectPlateForTracking}
             />
           ))}
         </div>
@@ -121,7 +194,7 @@ export const ANPRDashboard: React.FC = () => {
       {/* Latest Plate Reads Table */}
       <PlateReadsTable
         observations={recentReads}
-        onSelectPlate={handleSearch}
+        onSelectPlate={handleSelectPlateForTracking}
       />
     </div>
   );

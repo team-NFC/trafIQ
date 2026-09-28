@@ -86,11 +86,11 @@ export const SingleCameraDrawer: React.FC<SingleCameraDrawerProps> = ({
     : (camera.pcu !== undefined ? camera.pcu : (vehicleCount ? Number((vehicleCount * 1.15).toFixed(1)) : 0.0));
   const density = cameraResults?.density ?? (vehicleCount <= 6 ? 'LOW' : vehicleCount <= 15 ? 'MODERATE' : 'HIGH');
 
-  const bd = cameraResults?.vehicle_breakdown;
-  const cars = bd?.car ?? (vehicleCount ? Math.round(vehicleCount * 0.75) : 0);
-  const bikes = bd?.motorcycle ?? (vehicleCount ? Math.round(vehicleCount * 0.15) : 0);
+  const bd = cameraResults?.vehicle_breakdown || (camera as any).vehicle_breakdown;
+  const cars = bd?.car ?? 0;
+  const bikes = bd?.motorcycle ?? 0;
   const autos = bd?.auto_rickshaw ?? 0;
-  const buses = bd?.bus ?? (vehicleCount > 10 ? 1 : 0);
+  const buses = bd?.bus ?? 0;
   const trucks = bd?.truck ?? 0;
   const ambulances = (bd?.ambulance && bd.ambulance > 0) || camera.is_ambulance ? 1 : 0;
 
