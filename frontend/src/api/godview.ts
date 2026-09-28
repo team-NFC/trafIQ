@@ -213,8 +213,11 @@ export interface AmbulanceStateResponse {
 
 export interface CameraItem {
   id: string;
+  camera_id?: string;
+  group?: 'NORMAL' | 'AMBULANCE' | 'ANPR' | string;
   name: string;
   type?: 'normal' | 'junction_camera';
+  has_analysis?: boolean;
   latitude: number;
   longitude: number;
   location?: string;

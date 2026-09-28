@@ -82,6 +82,50 @@ export const CameraCard: React.FC<CameraCardProps> = ({
     }
   };
 
+  const getCameraGroup = (c: CameraItem): string => {
+    if (c.group) return c.group.toUpperCase();
+    const id = c.id.toUpperCase();
+    if (['CAM-01', 'CAM-02', 'CAM-03', 'CAM-04'].includes(id)) return 'NORMAL';
+    if (['CAM-05', 'CAM-06', 'CAM-07', 'CAM-08'].includes(id)) return 'AMBULANCE';
+    if (['CAM-09', 'CAM-10', 'CAM-11', 'CAM-12', 'CAM-13', 'CAM-14', 'CAM-15', 'CAM-16'].includes(id)) return 'ANPR';
+    if (c.is_ambulance) return 'AMBULANCE';
+    if (c.camera_type === 'ANPR') return 'ANPR';
+    return 'NORMAL';
+  };
+
+  const cameraGroup = getCameraGroup(camera);
+  const hasAnalysis = camera.has_analysis === true || (camera.count !== null && camera.count !== undefined && camera.status !== 'ANALYSIS PENDING');
+
+  const getGroupBadge = (grp: string) => {
+    switch (grp) {
+      case 'NORMAL':
+        return (
+          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+            NORMAL
+          </span>
+        );
+      case 'AMBULANCE':
+        return (
+          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30 flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+            AMBULANCE
+          </span>
+        );
+      case 'ANPR':
+        return (
+          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-purple-500/15 text-purple-300 border border-purple-500/30">
+            ANPR
+          </span>
+        );
+      default:
+        return (
+          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-800 text-slate-300 border border-slate-700">
+            {grp}
+          </span>
+        );
+    }
+  };
+
   return (
     <div
       onClick={() => onSelect(camera)}
@@ -106,13 +150,8 @@ export const CameraCard: React.FC<CameraCardProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
-          {/* Subtle Emergency Indicator */}
-          {isEmergency && (
-            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-500/20 text-rose-400 border border-rose-500/40 flex items-center gap-1 animate-pulse">
-              <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
-              EMERGENCY
-            </span>
-          )}
+          {/* Group Badge */}
+          {getGroupBadge(cameraGroup)}
 
           {/* Direction Badge */}
           {camera.direction && (
@@ -205,8 +244,8 @@ export const CameraCard: React.FC<CameraCardProps> = ({
             </span>
           </div>
 
-          <div className="text-[11px] text-neutral-400 truncate max-w-[140px] text-right" title={junctionName || camera.zone}>
-            {junctionName || camera.zone || 'Road Link'}
+          <div className="text-[11px] text-neutral-400 truncate max-w-[140px] text-right font-mono" title={junctionName || camera.zone}>
+            {junctionName ? junctionName : `Group: ${cameraGroup}`}
           </div>
         </div>
 
@@ -218,25 +257,33 @@ export const CameraCard: React.FC<CameraCardProps> = ({
                 <Car className="w-3 h-3 text-neutral-400" />
                 {camera.plate}
               </span>
-            ) : (
-              <span className="text-[10px] font-mono text-neutral-500">ANPR ACTIVE</span>
-            )}
+            ) : cameraGroup === 'ANPR' ? (
+              <span className="text-[10px] font-mono text-purple-300/80">ANPR ACTIVE</span>
+            ) : null}
 
             {getSignalBadge(camera.signal)}
           </div>
 
           <div className="flex items-center gap-2 text-[11px] font-mono text-neutral-400">
-            <span>
-              <strong className="text-white font-bold">{camera.count !== null && camera.count !== undefined ? camera.count : 0}</strong> veh
-            </span>
-            <span className="text-white/20">|</span>
-            <span>
-              Q: <strong className="text-neutral-300">{camera.queue !== null && camera.queue !== undefined ? camera.queue : 0}</strong>
-            </span>
-            <span className="text-white/20">|</span>
-            <span>
-              PCU: <strong className="text-neutral-300">{camera.pcu !== undefined && camera.pcu !== null ? Number(camera.pcu).toFixed(1) : (camera.count ? (camera.count * 1.15).toFixed(1) : '0.0')}</strong>
-            </span>
+            {hasAnalysis ? (
+              <>
+                <span>
+                  Vehicles: <strong className="text-white font-bold">{camera.count}</strong>
+                </span>
+                <span className="text-white/20">|</span>
+                <span>
+                  Q: <strong className="text-neutral-300">{camera.queue ?? 0}</strong>
+                </span>
+                <span className="text-white/20">|</span>
+                <span>
+                  PCU: <strong className="text-neutral-300">{camera.pcu !== undefined && camera.pcu !== null ? Number(camera.pcu).toFixed(1) : (camera.count ? (camera.count * 1.15).toFixed(1) : '0.0')}</strong>
+                </span>
+              </>
+            ) : (
+              <span className="text-neutral-400 italic text-[11px] font-sans">
+                Analysis unavailable
+              </span>
+            )}
           </div>
         </div>
       </div>

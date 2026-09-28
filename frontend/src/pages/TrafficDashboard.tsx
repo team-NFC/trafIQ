@@ -17,14 +17,16 @@ import {
 } from 'lucide-react';
 
 type GridLayoutType = '1x1' | '2x2' | '3x3' | '4x4' | 'ALL';
+type GroupFilterType = 'ALL' | 'NORMAL' | 'AMBULANCE' | 'ANPR';
 
 export const TrafficDashboard: React.FC = () => {
   const [cameras, setCameras] = useState<CameraItem[]>([]);
   const [junctions, setJunctions] = useState<JunctionItem[]>([]);
   const [selectedCamera, setSelectedCamera] = useState<CameraItem | null>(null);
+  const [groupFilter, setGroupFilter] = useState<GroupFilterType>('ALL');
   const [selectedJunctionId, setSelectedJunctionId] = useState<string | null>(null);
   const [selectedCamFilterId, setSelectedCamFilterId] = useState<string | null>(null);
-  const [gridLayout, setGridLayout] = useState<GridLayoutType>('2x2');
+  const [gridLayout, setGridLayout] = useState<GridLayoutType>('ALL');
   const [currentPage, setCurrentPage] = useState<number>(0);
   const [signalState, setSignalState] = useState<SignalState | null>(null);
   const [ambulanceActive, setAmbulanceActive] = useState<boolean>(false);
@@ -105,21 +107,45 @@ export const TrafficDashboard: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Horizontal scroll buttons
+  // Horizontal scroll buttons for pills track
   const scrollSelector = (offset: number) => {
     if (sliderRef.current) {
       sliderRef.current.scrollBy({ left: offset, behavior: 'smooth' });
     }
   };
 
-  // Filter cameras dynamically
+  // Helper to determine canonical group for a camera
+  const getCameraGroup = (c: CameraItem): string => {
+    if (c.group) return c.group.toUpperCase();
+    const id = c.id.toUpperCase();
+    if (['CAM-01', 'CAM-02', 'CAM-03', 'CAM-04'].includes(id)) return 'NORMAL';
+    if (['CAM-05', 'CAM-06', 'CAM-07', 'CAM-08'].includes(id)) return 'AMBULANCE';
+    if (['CAM-09', 'CAM-10', 'CAM-11', 'CAM-12', 'CAM-13', 'CAM-14', 'CAM-15', 'CAM-16'].includes(id)) return 'ANPR';
+    if (c.is_ambulance) return 'AMBULANCE';
+    if (c.camera_type === 'ANPR') return 'ANPR';
+    return 'NORMAL';
+  };
+
+  // Dynamic counts derived strictly from registered master camera list
+  const totalCount = cameras.length;
+  const normalCount = cameras.filter((c) => getCameraGroup(c) === 'NORMAL').length;
+  const ambulanceCount = cameras.filter((c) => getCameraGroup(c) === 'AMBULANCE').length;
+  const anprCount = cameras.filter((c) => getCameraGroup(c) === 'ANPR').length;
+
+  // Filter cameras dynamically across the master registry
   const filteredCameras = cameras.filter((cam) => {
-    // If a specific camera is filtered in the bar
+    // 1. Group filter (ALL / NORMAL / AMBULANCE / ANPR)
+    if (groupFilter !== 'ALL') {
+      const g = getCameraGroup(cam);
+      if (g !== groupFilter) return false;
+    }
+
+    // 2. If an individual camera pill is selected in the bar
     if (selectedCamFilterId && cam.id !== selectedCamFilterId) {
       return false;
     }
 
-    // If a junction group is filtered
+    // 3. If a junction group is filtered
     if (selectedJunctionId && selectedJunctionId !== 'ALL') {
       const junction = junctions.find((j) => j.id === selectedJunctionId);
       if (junction && !junction.connected_camera_ids?.includes(cam.id) && cam.junction_id !== selectedJunctionId) {
@@ -127,14 +153,15 @@ export const TrafficDashboard: React.FC = () => {
       }
     }
 
-    // Search query filter (matches ID, name, direction, or plate)
+    // 4. Search query filter (matches ID, name, direction, plate, or group)
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       const matchId = cam.id.toLowerCase().includes(q);
       const matchName = cam.name.toLowerCase().includes(q);
       const matchDir = (cam.direction || '').toLowerCase().includes(q);
       const matchPlate = (cam.plate || '').toLowerCase().includes(q);
-      if (!matchId && !matchName && !matchDir && !matchPlate) {
+      const matchGrp = getCameraGroup(cam).toLowerCase().includes(q);
+      if (!matchId && !matchName && !matchDir && !matchPlate && !matchGrp) {
         return false;
       }
     }
@@ -185,9 +212,17 @@ export const TrafficDashboard: React.FC = () => {
     setCurrentPage(0);
   };
 
+  const handleSelectGroup = (grp: GroupFilterType) => {
+    setGroupFilter(grp);
+    setSelectedJunctionId(null);
+    setSelectedCamFilterId(null);
+    setCurrentPage(0);
+  };
+
   const handleSelectJunction = (junctionId: string | null) => {
     setSelectedJunctionId(junctionId);
     setSelectedCamFilterId(null);
+    setGroupFilter('ALL');
     setCurrentPage(0);
   };
 
@@ -197,6 +232,7 @@ export const TrafficDashboard: React.FC = () => {
     } else {
       setSelectedCamFilterId(camId);
       setSelectedJunctionId(null);
+      setGroupFilter('ALL');
     }
     setCurrentPage(0);
   };
@@ -231,7 +267,7 @@ export const TrafficDashboard: React.FC = () => {
         />
       ) : (
         <>
-          {/* Top Title & Quick Stats Bar */}
+          {/* Top Title & Controls Bar */}
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-white/[0.08] pb-4">
             <div>
               <div className="flex items-center gap-2.5">
@@ -244,14 +280,24 @@ export const TrafficDashboard: React.FC = () => {
                     <span className="w-2 h-2 rounded-full bg-emerald-400" />
                   </h1>
                   <p className="text-xs text-neutral-400 mt-0.5">
-                    Live CCTV Feeds & Multi-Approach Traffic Intelligence ({cameras.length} Active Nodes)
+                    Live CCTV Feeds & Multi-Approach Traffic Intelligence ({totalCount} Registered Cameras)
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Layout Switcher & Refresh Controls */}
+            {/* Layout Switcher, Dynamic Count & Search Controls */}
             <div className="flex flex-wrap items-center gap-2.5">
+              {/* Dynamic Camera Count Badge */}
+              <div className="px-3 py-1.5 rounded-lg bg-black/60 border border-white/[0.12] text-xs font-mono font-bold text-white shadow-sm flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>
+                  {filteredCameras.length === totalCount
+                    ? `${totalCount} CAMERAS`
+                    : `${filteredCameras.length} / ${totalCount} CAMERAS`}
+                </span>
+              </div>
+
               {/* Search Bar */}
               <div className="relative">
                 <Search className="w-3.5 h-3.5 text-neutral-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
@@ -295,7 +341,124 @@ export const TrafficDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* DYNAMIC SCROLLABLE CAMERA & JUNCTION SELECTOR */}
+          {/* PRIMARY GROUP FILTERS: ALL, NORMAL, AMBULANCE, ANPR */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-black/40 border border-white/[0.08] p-2.5 rounded-xl backdrop-blur-md">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] font-mono text-neutral-400 uppercase tracking-wider mr-1 font-semibold">
+                Camera Groups:
+              </span>
+
+              {/* ALL */}
+              <button
+                onClick={() => handleSelectGroup('ALL')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition cursor-pointer flex items-center gap-1.5 border ${
+                  groupFilter === 'ALL' && !selectedJunctionId && !selectedCamFilterId
+                    ? 'bg-white text-black border-white shadow-md'
+                    : 'bg-white/[0.03] text-neutral-300 border-white/[0.08] hover:bg-white/[0.08] hover:text-white'
+                }`}
+              >
+                <Grid className="w-3.5 h-3.5" />
+                <span>ALL</span>
+                <span
+                  className={`text-[10px] font-sans px-1.5 py-0.2 rounded font-bold ${
+                    groupFilter === 'ALL' && !selectedJunctionId && !selectedCamFilterId
+                      ? 'bg-black/20 text-black'
+                      : 'bg-white/[0.08] text-neutral-300'
+                  }`}
+                >
+                  {totalCount}
+                </span>
+              </button>
+
+              {/* NORMAL */}
+              <button
+                onClick={() => handleSelectGroup('NORMAL')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition cursor-pointer flex items-center gap-1.5 border ${
+                  groupFilter === 'NORMAL' && !selectedJunctionId && !selectedCamFilterId
+                    ? 'bg-cyan-500 text-black border-cyan-400 shadow-md'
+                    : 'bg-white/[0.03] text-cyan-300 border-white/[0.08] hover:bg-cyan-500/10 hover:text-cyan-200'
+                }`}
+              >
+                <span>NORMAL</span>
+                <span
+                  className={`text-[10px] font-sans px-1.5 py-0.2 rounded font-bold ${
+                    groupFilter === 'NORMAL' && !selectedJunctionId && !selectedCamFilterId
+                      ? 'bg-black/20 text-black'
+                      : 'bg-cyan-950/80 text-cyan-300 border border-cyan-800/40'
+                  }`}
+                >
+                  {normalCount}
+                </span>
+              </button>
+
+              {/* AMBULANCE */}
+              <button
+                onClick={() => handleSelectGroup('AMBULANCE')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition cursor-pointer flex items-center gap-1.5 border ${
+                  groupFilter === 'AMBULANCE' && !selectedJunctionId && !selectedCamFilterId
+                    ? 'bg-rose-500 text-white border-rose-400 shadow-md'
+                    : 'bg-white/[0.03] text-rose-300 border-white/[0.08] hover:bg-rose-500/10 hover:text-rose-200'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" />
+                <span>AMBULANCE</span>
+                <span
+                  className={`text-[10px] font-sans px-1.5 py-0.2 rounded font-bold ${
+                    groupFilter === 'AMBULANCE' && !selectedJunctionId && !selectedCamFilterId
+                      ? 'bg-black/20 text-white'
+                      : 'bg-rose-950/80 text-rose-300 border border-rose-800/40'
+                  }`}
+                >
+                  {ambulanceCount}
+                </span>
+              </button>
+
+              {/* ANPR */}
+              <button
+                onClick={() => handleSelectGroup('ANPR')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition cursor-pointer flex items-center gap-1.5 border ${
+                  groupFilter === 'ANPR' && !selectedJunctionId && !selectedCamFilterId
+                    ? 'bg-purple-500 text-white border-purple-400 shadow-md'
+                    : 'bg-white/[0.03] text-purple-300 border-white/[0.08] hover:bg-purple-500/10 hover:text-purple-200'
+                }`}
+              >
+                <span>ANPR</span>
+                <span
+                  className={`text-[10px] font-sans px-1.5 py-0.2 rounded font-bold ${
+                    groupFilter === 'ANPR' && !selectedJunctionId && !selectedCamFilterId
+                      ? 'bg-black/20 text-white'
+                      : 'bg-purple-950/80 text-purple-300 border border-purple-800/40'
+                  }`}
+                >
+                  {anprCount}
+                </span>
+              </button>
+            </div>
+
+            {/* Active filter summary tag & reset button */}
+            <div className="flex items-center gap-2 text-xs font-mono text-neutral-400">
+              <span>Filter:</span>
+              <span className="px-2 py-0.5 rounded bg-white/[0.08] text-white border border-white/[0.1] font-bold">
+                {selectedCamFilterId ? selectedCamFilterId : selectedJunctionId ? selectedJunctionId : groupFilter}
+              </span>
+              {(groupFilter !== 'ALL' || selectedJunctionId || selectedCamFilterId || searchQuery) && (
+                <button
+                  onClick={() => {
+                    setGroupFilter('ALL');
+                    setSelectedJunctionId(null);
+                    setSelectedCamFilterId(null);
+                    setSearchQuery('');
+                    setCurrentPage(0);
+                  }}
+                  className="text-cyan-400 hover:text-cyan-300 underline text-xs cursor-pointer ml-1 font-semibold"
+                >
+                  Reset Filter
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* DYNAMIC SCROLLABLE CAMERA & JUNCTION SELECTOR TRACK */}
           <div className="relative flex items-center bg-black/40 border border-white/[0.08] rounded-xl p-1.5 backdrop-blur-md">
             {/* Scroll Left Button */}
             <button
@@ -311,23 +474,6 @@ export const TrafficDashboard: React.FC = () => {
               ref={sliderRef}
               className="flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-smooth px-1 py-0.5 flex-1 text-xs"
             >
-              {/* ALL CAMERAS PILL */}
-              <button
-                onClick={() => {
-                  setSelectedJunctionId(null);
-                  setSelectedCamFilterId(null);
-                  setCurrentPage(0);
-                }}
-                className={`px-3 py-1.5 rounded-lg font-mono font-bold shrink-0 transition cursor-pointer flex items-center gap-1.5 border ${
-                  !selectedJunctionId && !selectedCamFilterId
-                    ? 'bg-white text-black border-white shadow-sm'
-                    : 'bg-white/[0.04] text-neutral-300 border-white/[0.08] hover:bg-white/[0.08] hover:text-white'
-                }`}
-              >
-                <Grid className="w-3.5 h-3.5" />
-                <span>ALL ({cameras.length})</span>
-              </button>
-
               {/* JUNCTION GROUP PILLS */}
               {junctions.map((j) => {
                 const isSelected = selectedJunctionId === j.id;
@@ -407,7 +553,7 @@ export const TrafficDashboard: React.FC = () => {
             />
           )}
 
-          {/* CCTV VIDEO FEEDS GRID */}
+          {/* CCTV VIDEO FEEDS GRID (ALL CAMERAS LOADED DYNAMICALLY) */}
           {pagedCameras.length === 0 ? (
             <div className="py-16 rounded-xl border border-white/[0.08] bg-black/30 flex flex-col items-center justify-center text-center p-6 space-y-2">
               <Video className="w-10 h-10 text-neutral-600 mb-1" />
@@ -417,9 +563,11 @@ export const TrafficDashboard: React.FC = () => {
               </p>
               <button
                 onClick={() => {
+                  setGroupFilter('ALL');
                   setSelectedJunctionId(null);
                   setSelectedCamFilterId(null);
                   setSearchQuery('');
+                  setCurrentPage(0);
                 }}
                 className="mt-2 px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-xs font-semibold text-white border border-white/[0.1] transition cursor-pointer"
               >
@@ -440,7 +588,7 @@ export const TrafficDashboard: React.FC = () => {
             </div>
           )}
 
-          {/* PAGINATION / FOOTER CONTROLS (for 1x1, 2x2, 3x3, 4x4) */}
+          {/* PAGINATION / FOOTER CONTROLS (active when using 1x1, 2x2, 3x3, 4x4) */}
           {gridLayout !== 'ALL' && filteredCameras.length > pageSize && (
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-white/[0.08] text-xs text-neutral-400">
               <div className="font-mono">

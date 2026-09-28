@@ -86,9 +86,15 @@ def normalize_plate_string(plate: Optional[str]) -> str:
         return ""
     return re.sub(r"[\s\-_.:/]", "", str(plate)).upper()
 
-def get_camera_group(camera_id: str) -> str:
+def get_camera_group(camera_id: str, zone: Optional[str] = None, camera_type: Optional[str] = None, is_ambulance: bool = False) -> str:
     cid = to_canonical_cam_id(camera_id)
-    return CAMERA_GROUPS.get(cid, "CUSTOM")
+    if cid in CAMERA_GROUPS:
+        return CAMERA_GROUPS[cid]
+    if is_ambulance or (zone and ("AMBULANCE" in str(zone).upper() or "EMERGENCY" in str(zone).upper())):
+        return "AMBULANCE"
+    if (camera_type and "ANPR" in str(camera_type).upper()) or (zone and "SURVEILLANCE" in str(zone).upper()):
+        return "ANPR"
+    return "NORMAL"
 
 def get_authoritative_video_path(camera_id: str) -> Optional[Path]:
     """
@@ -872,9 +878,20 @@ def get_all_cameras():
 
     is_amb = (active_scenario == "ambulance")
 
+    # Natural sort order (CAM-01 to CAM-16, then CAM-17...)
+    def cam_sort_key(c):
+        m = re.search(r"(\d+)", c["id"])
+        return int(m.group(1)) if m else 999
+    rows.sort(key=cam_sort_key)
+
     # Authoritative enrichment: every camera reads from processed results.json
     for cam in rows:
         cid = cam["id"]
+        cam["camera_id"] = cid
+        cam["group"] = get_camera_group(cid, cam.get("zone"), cam.get("camera_type"), bool(cam.get("is_ambulance")))
+        cam["video_source"] = f"data/camera_videos/{cid}.mp4"
+        cam["source"] = f"data/camera_videos/{cid}.mp4"
+
         tdata = get_camera_traffic_data(cid, cam.get("video_source"))
         if tdata["has_analysis"]:
             cam["count"] = tdata["vehicle_count"]
@@ -1038,10 +1055,13 @@ def add_camera(payload: CameraCreate):
     conn.commit()
     conn.close()
 
+    grp = get_camera_group(cam_id, "CUSTOM", payload.camera_type, False)
     return {
         "status": "success",
         "camera": {
             "id": cam_id,
+            "camera_id": cam_id,
+            "group": grp,
             "name": payload.name.strip(),
             "type": cam_type,
             "latitude": exact_lat,
@@ -1050,13 +1070,14 @@ def add_camera(payload: CameraCreate):
             "junction_id": junc_id,
             "direction": payload.direction or "North",
             "camera_type": payload.camera_type or "CCTV",
-            "video_source": payload.video_source or "CAM-01",
+            "video_source": f"data/camera_videos/{cam_id}.mp4",
             "status": payload.status or "ONLINE",
             "description": payload.description or "",
             "zone": "CUSTOM",
-            "count": 18,
-            "queue": 5,
-            "pcu": 20.7,
+            "count": None,
+            "queue": None,
+            "pcu": None,
+            "has_analysis": False,
             "signal": "GREEN",
             "signal_color": "green",
             "timer": None,
