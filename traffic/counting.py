@@ -13,6 +13,7 @@ TARGET_CLASSES: Dict[int, str] = {
     2: "bus",
     3: "truck",
     4: "ambulance",
+    5: "auto_rickshaw",
 }
 
 

@@ -11,7 +11,7 @@ import { EmptyState } from '../components/common/EmptyState';
 import { Search, AlertCircle } from 'lucide-react';
 
 export const PlateSearchPage: React.FC = () => {
-  const { searchedPlate, setSearchedPlate, isDemoMode } = useApp();
+  const { searchedPlate, setSearchedPlate, setCurrentPage, isDemoMode } = useApp();
   const [journey, setJourney] = useState<VehicleJourney | null>(null);
   const [loading, setLoading] = useState(false);
   const [searchedText, setSearchedText] = useState(searchedPlate || 'TN45BB7890');
@@ -57,6 +57,24 @@ export const PlateSearchPage: React.FC = () => {
         </div>
       ) : journey ? (
         <div className="space-y-6">
+          {/* 3D Camera Tracking Link Banner */}
+          <div className="p-3.5 rounded-xl bg-[#090d16]/95 border border-cyan-500/30 flex items-center justify-between shadow-lg">
+            <div className="flex items-center gap-2.5">
+              <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse" />
+              <div className="text-xs font-mono">
+                <span className="text-white font-bold">{journey.plateNumber}</span>
+                <span className="text-slate-400 ml-2">spatio-temporal corridor ready for 3D reconstruction</span>
+              </div>
+            </div>
+            <button
+              onClick={() => setCurrentPage('camera_tracking')}
+              className="px-3 py-1.5 rounded-lg bg-cyan-600/80 hover:bg-cyan-500 text-white text-xs font-mono font-medium flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
+            >
+              <span>Launch 3D Camera Tracking</span>
+              <span>→</span>
+            </button>
+          </div>
+
           {/* Watchlist Match Card if vehicle is flagged */}
           {journey.databaseMatch?.isMatched && (
             <DatabaseAlertCard

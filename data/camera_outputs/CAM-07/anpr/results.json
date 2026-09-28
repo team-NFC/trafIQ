@@ -1,0 +1,20 @@
+{
+  "camera_id": "CAM-07",
+  "video_file": "CAM-07.mp4",
+  "total_confirmed_plates": 1,
+  "confirmed_vehicles": [
+    {
+      "vehicle_id": 7,
+      "vehicle_class": "ambulance",
+      "plate_number": "TN 45 AU 4608",
+      "normalized_plate": "TN45AU4608",
+      "confidence": 0.995,
+      "is_valid_indian_format": true,
+      "state_code": "TN",
+      "speed_kmh": 72.0,
+      "timestamp": "2.96s"
+    }
+  ],
+  "primary_plate": "TN 45 AU 4608",
+  "processed_at": "2026-09-27 22:36:42"
+}

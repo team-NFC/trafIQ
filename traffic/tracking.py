@@ -18,6 +18,7 @@ TARGET_CLASS_NAMES: Dict[int, str] = {
     2: "bus",
     3: "truck",
     4: "ambulance",
+    5: "auto_rickshaw",
 }
 
 
@@ -84,9 +85,9 @@ class VehicleTracker:
         self.direction_min_disp = direction_min_disp
         self.imgsz = imgsz
 
-        # Check custom 5-class model vs standard COCO
+        # Check custom 5 or 6-class model vs standard COCO
         self.is_custom_5_class = (
-            len(self.model.names) == 5
+            len(self.model.names) in [5, 6]
             and self.model.names.get(0) == "car"
             and self.model.names.get(4) == "ambulance"
         )

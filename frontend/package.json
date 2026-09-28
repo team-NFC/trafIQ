@@ -9,12 +9,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "cesium": "^1.145.0",
     "clsx": "^2.1.1",
     "lucide-react": "^1.16.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "recharts": "^2.15.1",
-    "tailwind-merge": "^3.0.2"
+    "tailwind-merge": "^3.0.2",
+    "vite-plugin-cesium": "^1.2.23"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.9",

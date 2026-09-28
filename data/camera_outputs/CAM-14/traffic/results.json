@@ -1,0 +1,32 @@
+{
+  "camera_id": "CAM-14",
+  "video_file": "CAM-14.mp4",
+  "status": "ONLINE",
+  "vehicle_count": 25,
+  "queue_count": 5,
+  "pcu": 27.0,
+  "density": "MODERATE",
+  "vehicle_breakdown": {
+    "car": 16,
+    "motorcycle": 6,
+    "bus": 1,
+    "truck": 2,
+    "ambulance": 0,
+    "auto_rickshaw": 0
+  },
+  "instantaneous_occupancy": {
+    "average": 10,
+    "peak": 12
+  },
+  "stopline_queue": {
+    "average": 3,
+    "peak": 5
+  },
+  "roi_active": true,
+  "roi_points_count": 13,
+  "fps": 24.0,
+  "total_frames": 240,
+  "frames_processed": 120,
+  "emergency_detected": false,
+  "processed_at": "2026-09-27 22:36:42"
+}

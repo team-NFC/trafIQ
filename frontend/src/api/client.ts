@@ -4,7 +4,11 @@
  * Strictly adheres to NO FAKE DATA: returns null when endpoints are not yet connected.
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+const isBrowser = typeof window !== 'undefined';
+const isDev = isBrowser && (window.location.port === '5173' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+// When running in Vite dev server, default to '' (same-origin relative URL) so requests go through the Vite proxy without cross-origin/PNA/ORB blocks!
+const API_BASE_URL = import.meta.env.VITE_API_URL || (isDev ? '' : 'http://127.0.0.1:8000');
 
 export interface ApiResponse<T> {
   data: T | null;
@@ -16,7 +20,12 @@ class ApiClient {
   private baseUrl: string;
 
   constructor() {
-    this.baseUrl = localStorage.getItem('trafficiq_api_base') || API_BASE_URL;
+    const saved = isBrowser ? localStorage.getItem('trafficiq_api_base') : null;
+    if (saved && saved !== 'http://127.0.0.1:8000' && saved !== 'http://localhost:8000') {
+      this.baseUrl = saved;
+    } else {
+      this.baseUrl = API_BASE_URL;
+    }
   }
 
   public getBaseUrl(): string {
@@ -90,6 +99,31 @@ class ApiClient {
       return { data: json, error: null, isLive: true };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Backend post request failed';
+      return { data: null, error: msg, isLive: false };
+    }
+  }
+
+  public async delete<T>(endpoint: string): Promise<ApiResponse<T>> {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+        method: 'DELETE',
+        signal: controller.signal,
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const json = await response.json();
+      return { data: json, error: null, isLive: true };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Backend delete request failed';
       return { data: null, error: msg, isLive: false };
     }
   }

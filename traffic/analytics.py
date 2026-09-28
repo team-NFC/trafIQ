@@ -129,7 +129,7 @@ class TrafficAnalytics:
         """Renders HUD card conforming to TrafficIQ specifications."""
         h, w = frame.shape[:2]
         hud_w = int(360 * scale)
-        hud_h = int(260 * scale)
+        hud_h = int(285 * scale)
         x1, y1 = int(20 * scale), int(20 * scale)
         x2, y2 = x1 + hud_w, y1 + hud_h
 
@@ -147,7 +147,7 @@ class TrafficAnalytics:
         thick_text = max(1, int(scale))
 
         # Title: Camera ID
-        cv2.putText(frame, f"TRAFFICIQ — {self.camera_id.upper()}", (x1 + int(15 * scale), y1 + int(28 * scale)), f_title, title_scale, (0, 215, 255), thick_title, cv2.LINE_AA)
+        cv2.putText(frame, f"TRAFFICIQ - {self.camera_id.upper()}", (x1 + int(15 * scale), y1 + int(28 * scale)), f_title, title_scale, (0, 215, 255), thick_title, cv2.LINE_AA)
         cv2.line(frame, (x1 + int(15 * scale), y1 + int(36 * scale)), (x2 - int(15 * scale), y1 + int(36 * scale)), (60, 75, 90), 1)
 
         # Zone Status line
@@ -162,25 +162,27 @@ class TrafficAnalytics:
         c_motos = counts.get("motorcycle", 0)
         c_buses = counts.get("bus", 0)
         c_trucks = counts.get("truck", 0)
+        c_autos = counts.get("auto_rickshaw", 0)
         c_ambs = counts.get("ambulance", 0)
 
-        cv2.putText(frame, f"Cars        : {c_cars}", (x1 + int(15 * scale), line_y + step_y), f_title, text_scale, (240, 240, 240), thick_text, cv2.LINE_AA)
-        cv2.putText(frame, f"Motorcycles : {c_motos}", (x1 + int(15 * scale), line_y + 2 * step_y), f_title, text_scale, (240, 240, 240), thick_text, cv2.LINE_AA)
-        cv2.putText(frame, f"Buses       : {c_buses}", (x1 + int(15 * scale), line_y + 3 * step_y), f_title, text_scale, (240, 240, 240), thick_text, cv2.LINE_AA)
-        cv2.putText(frame, f"Trucks      : {c_trucks}", (x1 + int(15 * scale), line_y + 4 * step_y), f_title, text_scale, (240, 240, 240), thick_text, cv2.LINE_AA)
+        cv2.putText(frame, f"Cars          : {c_cars}", (x1 + int(15 * scale), line_y + step_y), f_title, text_scale, (240, 240, 240), thick_text, cv2.LINE_AA)
+        cv2.putText(frame, f"Motorcycles   : {c_motos}", (x1 + int(15 * scale), line_y + 2 * step_y), f_title, text_scale, (240, 240, 240), thick_text, cv2.LINE_AA)
+        cv2.putText(frame, f"Buses         : {c_buses}", (x1 + int(15 * scale), line_y + 3 * step_y), f_title, text_scale, (240, 240, 240), thick_text, cv2.LINE_AA)
+        cv2.putText(frame, f"Trucks        : {c_trucks}", (x1 + int(15 * scale), line_y + 4 * step_y), f_title, text_scale, (240, 240, 240), thick_text, cv2.LINE_AA)
+        cv2.putText(frame, f"Auto-Rickshaws: {c_autos}", (x1 + int(15 * scale), line_y + 5 * step_y), f_title, text_scale, (0, 255, 128), thick_title if c_autos > 0 else thick_text, cv2.LINE_AA)
 
         amb_color = (0, 0, 255) if c_ambs > 0 else (240, 240, 240)
-        cv2.putText(frame, f"Ambulances  : {c_ambs}", (x1 + int(15 * scale), line_y + 5 * step_y), f_title, text_scale, amb_color, thick_title if c_ambs > 0 else thick_text, cv2.LINE_AA)
+        cv2.putText(frame, f"Ambulances    : {c_ambs}", (x1 + int(15 * scale), line_y + 6 * step_y), f_title, text_scale, amb_color, thick_title if c_ambs > 0 else thick_text, cv2.LINE_AA)
 
         # Emergency status: NORMAL vs AMBULANCE DETECTED
-        cv2.line(frame, (x1 + int(15 * scale), line_y + int(5.6 * step_y)), (x2 - int(15 * scale), line_y + int(5.6 * step_y)), (60, 75, 90), 1)
+        cv2.line(frame, (x1 + int(15 * scale), line_y + int(6.6 * step_y)), (x2 - int(15 * scale), line_y + int(6.6 * step_y)), (60, 75, 90), 1)
 
         is_emergency = metrics.get("emergency_vehicle_detected", False)
-        status_lbl = f"AMBULANCE DETECTED – {self.camera_id.upper()}" if is_emergency else "NORMAL"
+        status_lbl = f"AMBULANCE DETECTED - {self.camera_id.upper()}" if is_emergency else "NORMAL"
         status_col = (0, 0, 255) if is_emergency else (0, 255, 120)
 
-        cv2.putText(frame, "Emergency status: ", (x1 + int(15 * scale), line_y + int(6.8 * step_y)), f_title, text_scale * 0.95, (200, 200, 200), thick_text, cv2.LINE_AA)
-        cv2.putText(frame, status_lbl, (x1 + int(15 * scale), line_y + int(7.8 * step_y)), f_title, text_scale * 0.95, status_col, thick_title, cv2.LINE_AA)
+        cv2.putText(frame, "Emergency status: ", (x1 + int(15 * scale), line_y + int(7.8 * step_y)), f_title, text_scale * 0.95, (200, 200, 200), thick_text, cv2.LINE_AA)
+        cv2.putText(frame, status_lbl, (x1 + int(15 * scale), line_y + int(8.8 * step_y)), f_title, text_scale * 0.95, status_col, thick_title, cv2.LINE_AA)
 
         # FPS indicator
         cv2.putText(frame, f"FPS: {fps:.1f}", (x2 - int(85 * scale), y1 + int(28 * scale)), f_title, text_scale * 0.9, (0, 255, 200), thick_text, cv2.LINE_AA)
@@ -200,7 +202,7 @@ class TrafficAnalytics:
         cv2.rectangle(overlay, (bx1, by1), (bx2, by2), (0, 0, 255), max(2, int(2.5 * scale)))
         cv2.addWeighted(overlay, 0.88, frame, 0.12, 0, frame)
 
-        header = f"EMERGENCY VEHICLE DETECTED – {self.camera_id.upper()}"
+        header = f"EMERGENCY VEHICLE DETECTED - {self.camera_id.upper()}"
         cv2.putText(frame, header, (bx1 + int(20 * scale), by1 + int(32 * scale)), cv2.FONT_HERSHEY_SIMPLEX, 0.65 * scale, (255, 255, 255), max(2, int(2 * scale)), cv2.LINE_AA)
 
         if events:

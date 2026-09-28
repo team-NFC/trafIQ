@@ -12,6 +12,7 @@ __pycache__/
 *$py.class
 *.so
 *.pyd
+*.cache
 
 # Frontend dependencies & build outputs
 node_modules/

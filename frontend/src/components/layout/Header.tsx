@@ -1,10 +1,36 @@
 import React, { useState, useEffect } from 'react';
-import { useApp } from '../../context/AppContext';
+import { useApp, PageId } from '../../context/AppContext';
 import { apiClient } from '../../api/client';
-import { Clock, Calendar, Activity } from 'lucide-react';
+import {
+  Globe,
+  Video,
+  BarChart3,
+  ScanLine,
+  Navigation,
+  ShieldAlert,
+  Sparkles,
+  Clock,
+  Cpu
+} from 'lucide-react';
+
+interface NavItem {
+  id: PageId;
+  label: string;
+  icon: React.ElementType;
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { id: 'map', label: 'MAP', icon: Globe },
+  { id: 'cameras', label: 'CAMERAS', icon: Video },
+  { id: 'traffic_analysis', label: 'TRAFFIC ANALYSIS', icon: BarChart3 },
+  { id: 'anpr', label: 'ANPR', icon: ScanLine },
+  { id: 'camera_tracking', label: 'CAMERA TRACKING', icon: Navigation },
+  { id: 'database_alerts', label: 'DATABASE ALERTS', icon: ShieldAlert },
+  { id: 'ai', label: 'AI', icon: Sparkles }
+];
 
 export const Header: React.FC = () => {
-  const { systemTime, systemDate } = useApp();
+  const { currentPage, setCurrentPage, systemTime } = useApp();
   const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -24,67 +50,88 @@ export const Header: React.FC = () => {
     };
   }, []);
 
+  const isNavActive = (id: PageId) => {
+    if (currentPage === id) return true;
+    if (id === 'map' && currentPage === 'god_view') return true;
+    if (id === 'cameras' && (currentPage === 'traffic_live' || currentPage === 'traffic_cameras')) return true;
+    if (id === 'traffic_analysis' && (currentPage === 'traffic_analytics' || currentPage === 'signal_control' || currentPage === 'ambulance_priority')) return true;
+    if (id === 'anpr' && (currentPage === 'anpr_search')) return true;
+    if (id === 'camera_tracking' && (currentPage === 'anpr_tracking' || currentPage === 'anpr_journey')) return true;
+    if (id === 'database_alerts' && currentPage === 'anpr_alerts') return true;
+    return false;
+  };
+
   return (
-    <header className="h-16 bg-[#080d1a]/95 backdrop-blur border-b border-slate-800/80 sticky top-0 z-20 px-6 flex items-center justify-between">
-      {/* Title & System Brand */}
-      <div className="flex items-center gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-lg font-black tracking-wide text-white">
-              TRAFFIC<span className="text-cyan-400">IQ</span>
-            </h1>
-            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 uppercase tracking-wider">
-              Control Room
-            </span>
-          </div>
-          <p className="text-xs text-slate-400 font-medium">
-            AI Traffic Intelligence System
-          </p>
+    <header className="h-14 bg-[#07090e]/85 border-b border-white/[0.06] sticky top-0 z-40 px-4 sm:px-6 flex items-center justify-between select-none">
+      {/* 1. Clean Flat Brand Identity (No glass container) */}
+      <div className="flex items-center gap-2.5">
+        <div
+          onClick={() => setCurrentPage('map')}
+          className="flex items-center gap-2 cursor-pointer group"
+          title="Return to 3D Global Earth Map"
+        >
+          <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 group-hover:scale-110 transition-transform"></div>
+          <span className="font-bold tracking-wider text-sm text-white font-sans flex items-center">
+            TRAFFIC<span className="text-slate-400 font-mono font-normal">IQ</span>
+          </span>
         </div>
+        <span className="text-slate-700 font-sans text-xs hidden sm:inline">|</span>
+        <span className="text-[10px] text-slate-500 font-mono uppercase tracking-widest hidden xl:inline">
+          Global Intelligence
+        </span>
       </div>
 
-      {/* Right Telemetry & Status Badges */}
-      <div className="flex items-center gap-4">
-        {/* Real Backend Verification Status */}
-        <div
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold shadow-sm transition-all ${
-            backendOnline
-              ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300 shadow-emerald-950/50'
-              : 'bg-rose-950/40 border-rose-500/30 text-rose-300 shadow-rose-950/50'
-          }`}
-        >
-          <span className="relative flex h-2 w-2">
-            {backendOnline && (
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-            )}
-            <span
-              className={`relative inline-flex rounded-full h-2 w-2 ${
-                backendOnline ? 'bg-emerald-500' : 'bg-rose-500'
+      {/* 2. ONE Single Subtle Rounded Glass Container for the Navigation Option Group */}
+      <nav className="glass-option-group flex items-center gap-1 p-1 overflow-x-auto max-w-[65vw] sm:max-w-none scrollbar-none">
+        {NAV_ITEMS.map((item) => {
+          const active = isNavActive(item.id);
+          const Icon = item.icon;
+
+          return (
+            <button
+              key={item.id}
+              onClick={() => setCurrentPage(item.id)}
+              className={`px-3.5 py-1.5 text-xs font-mono tracking-wide flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+                active
+                  ? 'glass-option-item-active'
+                  : 'glass-option-item'
               }`}
-            />
-          </span>
-          <span className="font-mono">
-            Backend: {backendOnline ? 'ONLINE' : 'OFFLINE'}
+            >
+              <Icon className={`w-3.5 h-3.5 ${active ? 'text-white' : 'text-slate-400'}`} />
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* 3. Simple Flat Telemetry & Hardware Status (No glass container) */}
+      <div className="flex items-center gap-3 font-mono text-xs text-slate-400">
+        {/* Backend Online Status */}
+        <div className="flex items-center gap-1.5">
+          <span
+            className={`w-2 h-2 rounded-full ${
+              backendOnline ? 'bg-emerald-400' : 'bg-rose-400'
+            }`}
+          />
+          <span className="text-[11px] text-slate-200 font-semibold tracking-wider">
+            {backendOnline ? 'ONLINE' : 'OFFLINE'}
           </span>
         </div>
 
-        {/* Real Video Pipeline Badge */}
-        <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 text-xs font-medium">
-          <Activity className="w-3.5 h-3.5 text-cyan-400" />
-          <span>Real CCTV Video Active</span>
+        <span className="text-slate-700 hidden sm:inline">|</span>
+
+        {/* Local Hardware Indicator */}
+        <div className="hidden lg:flex items-center gap-1.5 text-[10px] text-slate-400">
+          <Cpu className="w-3 h-3 text-slate-400" />
+          <span>RTX 3050</span>
         </div>
 
-        {/* Dynamic Date & Time */}
-        <div className="hidden sm:flex items-center gap-3 px-3 py-1.5 rounded-lg bg-slate-900/90 border border-slate-800 text-xs font-mono text-slate-300">
-          <div className="flex items-center gap-1.5 text-slate-400">
-            <Calendar className="w-3.5 h-3.5" />
-            <span>{systemDate || 'Mon, Sep 21, 2026'}</span>
-          </div>
-          <span className="text-slate-700">|</span>
-          <div className="flex items-center gap-1.5 text-cyan-400 font-bold">
-            <Clock className="w-3.5 h-3.5" />
-            <span>{systemTime || '00:00:00'}</span>
-          </div>
+        <span className="text-slate-700 hidden sm:inline">|</span>
+
+        {/* Live Clock */}
+        <div className="hidden sm:flex items-center gap-1.5 text-slate-400 text-[11px]">
+          <Clock className="w-3 h-3 text-slate-500" />
+          <span>{systemTime || '00:00:00'}</span>
         </div>
       </div>
     </header>

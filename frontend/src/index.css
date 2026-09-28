@@ -55,3 +55,95 @@
 .emergency-pulse {
   animation: emergency-glow 1.8s ease-in-out infinite;
 }
+
+/* Cesium Viewer Customization */
+.cesium-viewer {
+  font-family: var(--font-mono) !important;
+}
+
+.cesium-viewer-bottom {
+  display: none !important;
+}
+
+/* ==========================================================================
+   FINAL UI RULE:
+   Use glassmorphism ONLY for sections that contain a GROUP of selectable/navigation OPTIONS.
+   Put the entire option group inside ONE single subtle rounded glass container.
+   The individual options must remain simple and flat.
+   No gradients, no color changing from top to bottom, no neon, no glowing borders,
+   no inner decorative lines, no excessive blur.
+   ========================================================================== */
+
+/* Single subtle rounded glass container around each actual OPTION GROUP */
+.glass-option-group {
+  background: rgba(16, 20, 28, 0.72);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  border-radius: 9999px;
+}
+
+/* Individual options inside the group - simple and flat */
+.glass-option-item {
+  color: #94a3b8;
+  background: transparent;
+  border: none;
+  border-radius: 9999px;
+  transition: all 0.15s ease-out;
+}
+
+.glass-option-item:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.glass-option-item-active {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 9999px;
+  font-weight: 600;
+}
+
+/* Backward compatibility fallbacks for existing modals/drawers (clean, flat, subtle) */
+.liquid-glass {
+  background: rgba(12, 16, 23, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+}
+
+.liquid-glass-subtle {
+  background: rgba(12, 16, 23, 0.70);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.liquid-glass-active {
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+}
+
+.liquid-glass-button {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+  transition: all 0.15s ease-out;
+}
+
+.liquid-glass-button:hover {
+  background: rgba(255, 255, 255, 0.10);
+  color: #ffffff;
+}
+
+.liquid-glass-capsule {
+  background: rgba(16, 20, 28, 0.72);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 9999px;
+}
+
+

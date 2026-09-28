@@ -1,4 +1,4 @@
-path: C:/Users/sanjeevi/.gemini/antigravity/scratch/TrafficIQ/dataset
+path: C:/Users/sanjeevi/OneDrive/Desktop/trafficIQ/dataset
 train: images/train
 val: images/val
 test: images/val
@@ -9,3 +9,4 @@ names:
   2: bus
   3: truck
   4: ambulance
+  5: auto_rickshaw

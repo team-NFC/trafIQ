@@ -9,13 +9,14 @@ import numpy as np
 import torch
 from ultralytics import YOLO
 
-# Strict 5 target vehicle classes for TrafficIQ
+# Strict target vehicle classes for TrafficIQ
 TARGET_CLASSES: Dict[int, str] = {
     0: "car",
     1: "motorcycle",
     2: "bus",
     3: "truck",
     4: "ambulance",
+    5: "auto_rickshaw",
 }
 
 # Color palette for visual bounding boxes (BGR format)
@@ -25,6 +26,7 @@ CLASS_COLORS: Dict[int, Tuple[int, int, int]] = {
     2: (255, 0, 255),   # Bus (magenta)
     3: (0, 165, 255),   # Truck (orange)
     4: (0, 0, 255),     # Ambulance (bright red - emergency)
+    5: (0, 255, 128),   # Auto Rickshaw (vibrant spring green)
 }
 
 
@@ -76,23 +78,25 @@ class VehicleDetector:
         self.classes = self.model.names
         print(f"[Detector] Model loaded with {len(self.classes)} classes: {self.classes}")
 
-        # Check whether this model is our custom 5-class model
-        self.is_custom_5_class = (
-            len(self.classes) == 5
+        # Check whether this model is our custom 5-class or 6-class model
+        self.is_custom_model = (
+            len(self.classes) in (5, 6)
             and self.classes.get(0) == "car"
             and self.classes.get(4) == "ambulance"
         )
-        if self.is_custom_5_class:
-            print("[Detector] Verified custom 5-class model: {0: car, 1: motorcycle, 2: bus, 3: truck, 4: ambulance}")
-            self.filter_classes = None  # All 5 classes are valid targets
+        self.is_custom_5_class = self.is_custom_model
+        if self.is_custom_model:
+            print(f"[Detector] Verified custom TrafficIQ model ({len(self.classes)} classes): {self.classes}")
+            self.filter_classes = None  # All classes are valid targets
         else:
             print(f"[Detector NOTICE] Non-custom model detected with {len(self.classes)} classes.")
             print("[Detector] Filtering for traffic vehicles (car, motorcycle, bus, truck) and mapping to TrafficIQ schema.")
-            # COCO mapping to TrafficIQ 5-class schema:
+            # COCO mapping to TrafficIQ schema:
             # 2 (car) -> 0, 3 (motorcycle) -> 1, 5 (bus) -> 2, 7 (truck) -> 3
             self.coco_to_trafficiq = {2: 0, 3: 1, 5: 2, 7: 3}
             self.filter_classes = list(self.coco_to_trafficiq.keys())
 
+    @torch.no_grad()
     def detect(self, frame: np.ndarray) -> List[Dict[str, Any]]:
         """
         Run detection on a single frame.
@@ -103,6 +107,7 @@ class VehicleDetector:
         predict_kwargs = {
             "source": frame,
             "conf": self.conf_threshold,
+            "imgsz": 640,
             "device": self.device,
             "verbose": False,
         }

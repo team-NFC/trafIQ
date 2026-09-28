@@ -18,7 +18,8 @@ CLASSES = {
     1: "motorcycle",
     2: "bus",
     3: "truck",
-    4: "ambulance"
+    4: "ambulance",
+    5: "auto_rickshaw",
 }
 
 

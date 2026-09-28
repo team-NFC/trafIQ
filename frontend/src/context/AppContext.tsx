@@ -2,6 +2,15 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { SignalMode } from '../types/signal';
 
 export type PageId =
+  | 'map'
+  | 'cameras'
+  | 'traffic_analysis'
+  | 'anpr'
+  | 'camera_tracking'
+  | 'database_alerts'
+  | 'ai'
+  // Legacy aliases
+  | 'god_view'
   | 'overview'
   | 'traffic_live'
   | 'traffic_cameras'
@@ -22,6 +31,8 @@ interface AppContextType {
   setDemoMode: (val: boolean) => void;
   selectedCameraId: string | null;
   setSelectedCameraId: (id: string | null) => void;
+  selectedJunctionId: string | null;
+  setSelectedJunctionId: (id: string | null) => void;
   searchedPlate: string;
   setSearchedPlate: (plate: string) => void;
   signalMode: SignalMode;
@@ -33,8 +44,9 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [currentPage, setCurrentPage] = useState<PageId>('traffic_live');
+  const [currentPage, setCurrentPage] = useState<PageId>('map');
   const [selectedCameraId, setSelectedCameraId] = useState<string | null>(null);
+  const [selectedJunctionId, setSelectedJunctionId] = useState<string | null>('JUNC-01');
   const [searchedPlate, setSearchedPlate] = useState<string>('TN45BB7890');
   const [signalMode, setSignalMode] = useState<SignalMode>('NORMAL');
 
@@ -66,6 +78,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setDemoMode: () => {},
         selectedCameraId,
         setSelectedCameraId,
+        selectedJunctionId,
+        setSelectedJunctionId,
         searchedPlate,
         setSearchedPlate,
         signalMode,

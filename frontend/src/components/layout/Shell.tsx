@@ -1,28 +1,28 @@
-import React, { useState } from 'react';
-import { Sidebar } from './Sidebar';
+import React from 'react';
 import { Header } from './Header';
+import { HangingCCTVWidget } from './HangingCCTVWidget';
+import { useApp } from '../../context/AppContext';
 
 interface ShellProps {
   children: React.ReactNode;
 }
 
 export const Shell: React.FC<ShellProps> = ({ children }) => {
-  const [collapsed, setCollapsed] = useState(false);
+  const { currentPage } = useApp();
+  const isMap = currentPage === 'map' || currentPage === 'god_view';
 
   return (
-    <div className="min-h-screen bg-[#070b14] text-slate-100 flex flex-col">
-      <Sidebar collapsed={collapsed} onToggleCollapse={() => setCollapsed(!collapsed)} />
+    <div className="min-h-screen bg-[#07090e] text-slate-100 flex flex-col font-sans antialiased overflow-hidden select-none">
+      {/* 1. Minimal Top Navigation */}
+      <Header />
 
-      <div
-        className={`flex-1 flex flex-col transition-all duration-300 ${
-          collapsed ? 'pl-18' : 'pl-64'
-        }`}
-      >
-        <Header />
-        <main className="flex-1 p-6 overflow-y-auto">
-          {children}
-        </main>
-      </div>
+      {/* 2. Movable Ceiling-Track Hanging CCTV AI Shortcut */}
+      <HangingCCTVWidget />
+
+      {/* 3. Main Content Viewport (Sidebar Removed - Full-Screen Primary Canvas) */}
+      <main className={`flex-1 relative w-full ${isMap ? 'overflow-hidden p-0' : 'overflow-y-auto p-6 bg-[#090b10]'}`}>
+        {children}
+      </main>
     </div>
   );
 };

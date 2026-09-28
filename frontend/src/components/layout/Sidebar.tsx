@@ -1,6 +1,7 @@
 import React from 'react';
 import { useApp, PageId } from '../../context/AppContext';
 import {
+  Globe,
   LayoutDashboard,
   Video,
   BarChart3,
@@ -42,7 +43,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggleCollapse })
     >
       {/* Brand Header */}
       <div className="h-16 flex items-center justify-between px-4 border-b border-slate-800/80 bg-[#070a13]">
-        <div className="flex items-center gap-3 overflow-hidden cursor-pointer" onClick={() => setCurrentPage('overview')}>
+        <div className="flex items-center gap-3 overflow-hidden cursor-pointer" onClick={() => setCurrentPage('god_view')}>
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white shadow-md shadow-cyan-500/25 shrink-0">
             <Radio className="w-5 h-5 animate-pulse" />
           </div>
@@ -72,11 +73,27 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggleCollapse })
         {/* Main Section */}
         <div className="space-y-1">
           <div
+            onClick={() => setCurrentPage('god_view')}
+            className={navItemClass('god_view')}
+            title="God's-Eye View (16-Cam Map & Scenarios)"
+          >
+            <Globe className="w-5 h-5 shrink-0 text-cyan-400" />
+            {!collapsed && (
+              <span className="flex items-center justify-between flex-1">
+                <span>God's-Eye View</span>
+                <span className="text-[9px] bg-cyan-500/20 text-cyan-300 px-1.5 py-0.5 rounded border border-cyan-500/40 font-mono font-bold">
+                  16-CAM
+                </span>
+              </span>
+            )}
+          </div>
+
+          <div
             onClick={() => setCurrentPage('overview')}
             className={navItemClass('overview')}
             title="Overview"
           >
-            <LayoutDashboard className="w-5 h-5 shrink-0 text-cyan-400" />
+            <LayoutDashboard className="w-5 h-5 shrink-0 text-slate-400" />
             {!collapsed && <span>Overview</span>}
           </div>
         </div>

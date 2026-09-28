@@ -12,11 +12,21 @@ import cv2
 
 
 def normalize_camera_id(camera_arg: str) -> str:
-    """Normalize '1' -> 'camera_01', 'cam2' -> 'camera_02', 'camera_03' -> 'camera_03'."""
+    """Normalize '1' -> 'camera_01', 'cam2' -> 'camera_02', 'CAM-01' -> 'camera_01'."""
     cam_str = str(camera_arg).strip()
     if cam_str.isdigit():
         return f"camera_{int(cam_str):02d}"
-    clean = cam_str.lower().replace("camera_", "").replace("camera", "").replace("cam", "").strip()
+    clean = (
+        cam_str.lower()
+        .replace("camera_", "")
+        .replace("camera", "")
+        .replace("cam-", "")
+        .replace("cam_", "")
+        .replace("cam", "")
+        .strip("-")
+        .strip("_")
+        .strip()
+    )
     if clean.isdigit():
         return f"camera_{int(clean):02d}"
     return cam_str
@@ -35,19 +45,16 @@ class ROIZone:
         frame_shape: Optional[Tuple[int, int]] = None,
         point_type: str = "bottom_center",
     ):
-        """
-        Initialize the ROI for a camera.
-
-        :param camera_id: Identifier for the camera (e.g. '1', 'camera_01')
-        :param config_dir: Directory containing camera ROI JSON configs (default: config/roi)
-        :param frame_shape: Tuple of (height, width) to scale normalized coordinates
-        :param point_type: Which vehicle point to test: 'bottom_center' (recommended for road contact) or 'center'
-        """
+        self.raw_camera_id = str(camera_id).strip()
         self.camera_id = normalize_camera_id(camera_id)
         if config_dir is None:
             config_dir = str(Path(__file__).parent.parent / "config" / "roi")
         self.config_dir = Path(config_dir)
         self.config_path = self.config_dir / f"{self.camera_id}.json"
+        if not self.config_path.exists():
+            alt_path = self.config_dir / f"{self.raw_camera_id.upper()}.json"
+            if alt_path.exists():
+                self.config_path = alt_path
 
         self.polygon_pts: Optional[np.ndarray] = None
         self.raw_coords: List[List[float]] = []
@@ -59,27 +66,18 @@ class ROIZone:
         self._load_config()
 
     def _load_config(self) -> None:
-        """Load polygon vertices from camera-specific JSON."""
+        """Load polygon vertices from camera-specific JSON, or default perspective road zone."""
         if not self.config_path.exists():
-            error_msg = (
-                f"\n[ROIZone ERROR] Camera ROI configuration not found: {self.config_path}\n"
-                f"To configure an ROI for '{self.camera_id}', create a JSON file at:\n"
-                f"  {self.config_path.resolve()}\n"
-                f"or run: python scripts/draw_roi.py --source <video> --camera {self.camera_id}\n"
-                f"Example content (normalized coordinates 0.0 to 1.0):\n"
-                f"{{\n"
-                f'  "camera_id": "{self.camera_id}",\n'
-                f'  "roi_type": "polygon",\n'
-                f'  "normalized": true,\n'
-                f'  "points": [\n'
-                f"    [0.20, 0.45],\n"
-                f"    [0.80, 0.45],\n"
-                f"    [0.95, 0.95],\n"
-                f"    [0.05, 0.95]\n"
-                f"  ]\n"
-                f"}}\n"
-            )
-            raise FileNotFoundError(error_msg)
+            # Use universal perspective road trapezoid if camera doesn't have custom geometry
+            self.description = f"Universal Perspective Traffic Zone for {self.raw_camera_id}"
+            self.raw_coords = [
+                [0.10, 0.25],
+                [0.90, 0.25],
+                [0.98, 0.98],
+                [0.02, 0.98]
+            ]
+            self.is_normalized = True
+            return
 
         with open(self.config_path, "r", encoding="utf-8-sig") as f:
             data = json.load(f)
