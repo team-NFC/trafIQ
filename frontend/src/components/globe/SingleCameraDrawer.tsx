@@ -35,7 +35,7 @@ export const SingleCameraDrawer: React.FC<SingleCameraDrawerProps> = ({
   const { setCurrentPage } = useApp();
   if (!camera) return null;
 
-  const baseUrl = apiClient.getBaseUrl();
+  const baseUrl = apiClient.getVideoBaseUrl();
   const streamUrl = `${baseUrl}/api/video/camera/${camera.id}`;
   const frameUrl = `${baseUrl}/api/video/frame/${camera.id}`;
 

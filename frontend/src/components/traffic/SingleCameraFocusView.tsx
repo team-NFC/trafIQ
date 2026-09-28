@@ -35,7 +35,7 @@ export const SingleCameraFocusView: React.FC<SingleCameraFocusViewProps> = ({
   const [streamError, setStreamError] = useState(false);
   const [retryNonce, setRetryNonce] = useState(0);
 
-  const baseUrl = apiClient.getBaseUrl();
+  const baseUrl = apiClient.getVideoBaseUrl();
   const isEmergency = Boolean(camera.is_ambulance);
   const isOffline = camera.status === 'OFFLINE';
 

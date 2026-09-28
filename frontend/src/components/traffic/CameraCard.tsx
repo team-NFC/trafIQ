@@ -26,7 +26,7 @@ export const CameraCard: React.FC<CameraCardProps> = ({
   const [streamError, setStreamError] = useState(false);
   const [retryNonce, setRetryNonce] = useState(0);
 
-  const baseUrl = apiClient.getBaseUrl();
+  const baseUrl = apiClient.getVideoBaseUrl();
   const isEmergency = Boolean(camera.is_ambulance);
   const isOffline = camera.status === 'OFFLINE';
   const isMissingNode = camera.status === 'MISSING_NODE' || Boolean(camera.is_missing);

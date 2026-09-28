@@ -804,6 +804,7 @@ export const GlobalDashboardMap: React.FC<GlobalDashboardMapProps> = ({
         initialLon={addCoords?.lon}
         existingJunctionsCount={junctions.length}
         existingCamerasCount={cameras.length}
+        existingCameraIds={cameras.map(c => c.id)}
         onClose={() => setIsAddJunctionOpen(false)}
         onJunctionAdded={handleJunctionAdded}
         onPickOnMap={() => {

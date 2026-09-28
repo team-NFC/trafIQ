@@ -15,6 +15,7 @@ interface AddJunctionModalProps {
   initialLon?: number | null;
   existingJunctionsCount?: number;
   existingCamerasCount?: number;
+  existingCameraIds?: string[];
   onClose: () => void;
   onJunctionAdded: (junction: JunctionItem) => void;
   onPickOnMap: (targetIndex?: number | 'junction') => void;
@@ -60,6 +61,7 @@ export const AddJunctionModal: React.FC<AddJunctionModalProps> = ({
   initialLon,
   existingJunctionsCount = 0,
   existingCamerasCount = 0,
+  existingCameraIds = [],
   onClose,
   onJunctionAdded,
   onPickOnMap
@@ -87,7 +89,12 @@ export const AddJunctionModal: React.FC<AddJunctionModalProps> = ({
       setError(null);
 
       // Generate brand-new isolated camera IDs for this new junction
-      const baseCamIndex = Math.max(existingCamerasCount, existingJunctionsCount * 4);
+      const existingNums = existingCameraIds.map(id => {
+        const match = id.match(/CAM-(\d+)/i);
+        return match ? parseInt(match[1], 10) : 0;
+      });
+      const maxExistingNum = existingNums.length > 0 ? Math.max(...existingNums, 0) : 0;
+      const baseCamIndex = Math.max(maxExistingNum, existingCamerasCount, existingJunctionsCount * 4);
       const rows: ConfigCamRow[] = [];
       for (let i = 0; i < numCameras; i++) {
         const camNum = baseCamIndex + i + 1;
@@ -112,7 +119,7 @@ export const AddJunctionModal: React.FC<AddJunctionModalProps> = ({
       }
       setCameraRows(rows);
     }
-  }, [isOpen, initialLat, initialLon, existingJunctionsCount, existingCamerasCount]);
+  }, [isOpen, initialLat, initialLon, existingJunctionsCount, existingCamerasCount, existingCameraIds]);
 
   // When junction coordinates change, update camera approach offsets around the new center
   useEffect(() => {

@@ -27,7 +27,7 @@ export const cameraService = {
           fps: info.fps || 24,
           resolution: info.resolution || '1920x1080',
           sourceType: 'RECORDED CCTV',
-          streamUrl: `${apiClient.getBaseUrl()}/api/video/camera/${camNum}`,
+          streamUrl: `${apiClient.getVideoBaseUrl()}/api/video/camera/${camNum}`,
           hasAmbulance: false,
           counts: null,
           density: null,

@@ -32,15 +32,37 @@ class ApiClient {
     return this.baseUrl;
   }
 
+  public getVideoBaseUrl(): string {
+    // Dedicated origin for continuous MJPEG video streams prevents HTTP/1.1 socket pool
+    // starvation on the Vite dev server port 5173, keeping API requests fast and unblocked.
+    if (isBrowser && window.location.hostname && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      return `http://${window.location.hostname}:8000`;
+    }
+    return 'http://127.0.0.1:8000';
+  }
+
   public setBaseUrl(url: string) {
     this.baseUrl = url;
     localStorage.setItem('trafficiq_api_base', url);
   }
 
+  private formatError(err: unknown, defaultMsg: string): string {
+    if (err instanceof Error) {
+      if (err.name === 'AbortError' || err.message.toLowerCase().includes('abort')) {
+        return 'Request timed out waiting for backend response. Please check that the backend server is running.';
+      }
+      if (err.message.toLowerCase().includes('failed to fetch')) {
+        return 'Network connection error: Unable to reach TrafficIQ backend server (http://127.0.0.1:8000).';
+      }
+      return err.message;
+    }
+    return defaultMsg;
+  }
+
   public async checkHealth(): Promise<boolean> {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000);
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
       const res = await fetch(`${this.baseUrl}/api/health`, { signal: controller.signal });
       clearTimeout(timeoutId);
       if (res.ok) {
@@ -53,10 +75,10 @@ class ApiClient {
     }
   }
 
-  public async get<T>(endpoint: string): Promise<ApiResponse<T>> {
+  public async get<T>(endpoint: string, timeoutMs = 25000): Promise<ApiResponse<T>> {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
       const response = await fetch(`${this.baseUrl}${endpoint}`, {
         signal: controller.signal,
@@ -72,15 +94,15 @@ class ApiClient {
       const json = await response.json();
       return { data: json, error: null, isLive: true };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Backend connection failed';
+      const msg = this.formatError(err, 'Backend connection failed');
       return { data: null, error: msg, isLive: false };
     }
   }
 
-  public async post<T>(endpoint: string, body: unknown): Promise<ApiResponse<T>> {
+  public async post<T>(endpoint: string, body: unknown, timeoutMs = 35000): Promise<ApiResponse<T>> {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
       const response = await fetch(`${this.baseUrl}${endpoint}`, {
         method: 'POST',
@@ -98,15 +120,15 @@ class ApiClient {
       const json = await response.json();
       return { data: json, error: null, isLive: true };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Backend post request failed';
+      const msg = this.formatError(err, 'Backend post request failed');
       return { data: null, error: msg, isLive: false };
     }
   }
 
-  public async delete<T>(endpoint: string): Promise<ApiResponse<T>> {
+  public async delete<T>(endpoint: string, timeoutMs = 25000): Promise<ApiResponse<T>> {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
       const response = await fetch(`${this.baseUrl}${endpoint}`, {
         method: 'DELETE',
@@ -123,7 +145,7 @@ class ApiClient {
       const json = await response.json();
       return { data: json, error: null, isLive: true };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Backend delete request failed';
+      const msg = this.formatError(err, 'Backend delete request failed');
       return { data: null, error: msg, isLive: false };
     }
   }

@@ -199,7 +199,7 @@ export const JunctionOverviewModal: React.FC<JunctionOverviewModalProps> = ({
   const { setCurrentPage, setSelectedJunctionId } = useApp();
   const [data, setData] = useState<JunctionDetailResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const baseUrl = apiClient.getBaseUrl();
+  const baseUrl = apiClient.getVideoBaseUrl();
 
   const [activeCamId, setActiveCamId] = useState<string | null>(null);
   const [countdown, setCountdown] = useState<number>(25);
