@@ -111,7 +111,7 @@ export const AddJunctionModal: React.FC<AddJunctionModalProps> = ({
           id: camId,
           name: `Camera ${camId} (${defaultDir} Approach)`,
           direction: defaultDir,
-          videoSource: `CAM-${String(((camNum - 1) % 8) + 1).padStart(2, '0')}`,
+          videoSource: `CAM-${String((i % 4) + 1).padStart(2, '0')}`,
           lat: initialLat !== undefined && initialLat !== null ? offsetLat.toFixed(6) : '',
           lon: initialLon !== undefined && initialLon !== null ? offsetLon.toFixed(6) : '',
           cameraType: 'CCTV'

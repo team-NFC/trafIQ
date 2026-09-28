@@ -1,7 +1,9 @@
 import asyncio
 import hashlib
 import json
+import logging
 import os
+import re
 import secrets
 import sqlite3
 import sys
@@ -15,6 +17,10 @@ from fastapi import FastAPI, HTTPException, Query, Request, UploadFile, File, Fo
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse, Response
 from pydantic import BaseModel, Field
+
+# Setup logger
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger("trafficiq")
 
 # Set project root in path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -35,36 +41,76 @@ ANPR_OUTPUT_DIR = PROJECT_ROOT / "anpr" / "output"
 EVIDENCE_DIR = PROJECT_ROOT / "data" / "evidence"
 SIGNAL_CONFIG_PATH = PROJECT_ROOT / "config" / "signal_config.json"
 
-def resolve_camera_video_path(cam_idx: int) -> Path:
-    # 1. First priority: direct match in data/camera_videos/CAM-XX.mp4
-    p_cam = CAMERA_VIDEOS_DIR / f"CAM-{cam_idx:02d}.mp4"
-    if p_cam.is_file():
-        return p_cam
-    # 2. Match in data/videos/camera_XX.mp4
-    p_data = DATA_VIDEOS_DIR / f"camera_{cam_idx:02d}.mp4"
-    if p_data.is_file():
-        return p_data
-    # 3. Fallbacks to situation folders
-    if cam_idx <= 4:
-        p_norm = NORMAL_VIDEOS_DIR / f"camera_{cam_idx:02d}.mp4"
-        if p_norm.is_file():
-            return p_norm
-    elif cam_idx <= 8:
-        p_amb = AMBULANCE_VIDEOS_DIR / f"camera_{((cam_idx - 1) % 4) + 1:02d}.mp4"
-        if p_amb.is_file():
-            return p_amb
-    return p_cam
+# ==============================================================================
+# AUTHORITATIVE CAMERA REGISTRY & VIDEO MAPPING
+# Strictly 1-to-1: CAM-XX -> data/camera_videos/CAM-XX.mp4
+# ==============================================================================
+CAMERA_GROUPS: Dict[str, str] = {
+    "CAM-01": "NORMAL",
+    "CAM-02": "NORMAL",
+    "CAM-03": "NORMAL",
+    "CAM-04": "NORMAL",
+    "CAM-05": "AMBULANCE",
+    "CAM-06": "AMBULANCE",
+    "CAM-07": "AMBULANCE",
+    "CAM-08": "AMBULANCE",
+    "CAM-09": "ANPR",
+    "CAM-10": "ANPR",
+    "CAM-11": "ANPR",
+    "CAM-12": "ANPR",
+    "CAM-13": "ANPR",
+    "CAM-14": "ANPR",
+    "CAM-15": "ANPR",
+    "CAM-16": "ANPR",
+}
 
-# Central Camera Video Storage mapping for CAM-01 to CAM-16
+def to_canonical_cam_id(camera_id: str) -> str:
+    """
+    Normalizes any camera reference to canonical CAM-XX format (e.g. CAM-01, CAM-02).
+    """
+    if not camera_id:
+        return "CAM-01"
+    s = str(camera_id).split("/")[-1].split("\\")[-1].strip()
+    if s.lower().endswith(".mp4"):
+        s = s[:-4]
+    clean = s.upper().replace("CAMERA_", "CAM-").replace("CAMERA-", "CAM-").replace("CAMERA", "CAM-").replace("_", "-")
+    m = re.search(r"(\d+)", clean)
+    if m:
+        num = int(m.group(1))
+        return f"CAM-{num:02d}"
+    return clean
+
+def get_camera_group(camera_id: str) -> str:
+    cid = to_canonical_cam_id(camera_id)
+    return CAMERA_GROUPS.get(cid, "CUSTOM")
+
+def get_authoritative_video_path(camera_id: str) -> Optional[Path]:
+    """
+    Authoritative 1-to-1 video path resolver strictly for data/camera_videos/CAM-XX.mp4.
+    Never falls back to another camera's video or another directory.
+    """
+    cid = to_canonical_cam_id(camera_id)
+    target = CAMERA_VIDEOS_DIR / f"{cid}.mp4"
+    if target.is_file():
+        return target
+    return None
+
+# Authoritative Camera Video Storage mapping for CAM-01 to CAM-16
 CAMERA_VIDEO_MAP: Dict[str, Dict[str, Any]] = {
-    f"{i:02d}": {
+    f"CAM-{i:02d}": {
+        "id": f"CAM-{i:02d}",
         "name": f"CAM-{i:02d}",
-        "path": resolve_camera_video_path(i),
+        "path": CAMERA_VIDEOS_DIR / f"CAM-{i:02d}.mp4",
         "approach": f"Approach {((i-1)%4)+1}",
         "type": "normal" if i <= 4 else ("ambulance" if i <= 8 else "anpr"),
+        "group": CAMERA_GROUPS.get(f"CAM-{i:02d}", "NORMAL"),
     }
     for i in range(1, 17)
 }
+# Backward compatibility lookup by zero-padded integer and raw integer
+for i in range(1, 17):
+    CAMERA_VIDEO_MAP[f"{i:02d}"] = CAMERA_VIDEO_MAP[f"CAM-{i:02d}"]
+    CAMERA_VIDEO_MAP[str(i)] = CAMERA_VIDEO_MAP[f"CAM-{i:02d}"]
 
 CAMERA_META: Dict[str, Dict[str, str]] = {
     k: {"name": v["name"], "approach": v["approach"], "file": v["path"].name}
@@ -93,13 +139,14 @@ class CameraStreamHub:
             if self.running:
                 return
             self.running = True
-            for cam_id, meta in CAMERA_VIDEO_MAP.items():
-                video_path = meta["path"]
+            for i in range(1, 17):
+                cam_id = f"CAM-{i:02d}"
+                video_path = CAMERA_VIDEOS_DIR / f"{cam_id}.mp4"
                 if video_path.is_file():
                     t = threading.Thread(
                         target=self._worker,
                         args=(cam_id, video_path),
-                        name=f"CCTV-Worker-CAM{cam_id}",
+                        name=f"CCTV-Worker-{cam_id}",
                         daemon=True,
                     )
                     t.start()
@@ -117,6 +164,7 @@ class CameraStreamHub:
     def _worker(self, cam_id: str, video_path: Path):
         cap = cv2.VideoCapture(str(video_path))
         if not cap.isOpened():
+            logger.error(f"[CAMERA] Failed to open video for {cam_id}: {video_path}")
             return
 
         fps = cap.get(cv2.CAP_PROP_FPS) or 24.0
@@ -135,7 +183,14 @@ class CameraStreamHub:
             resized = cv2.resize(frame, (768, 432), interpolation=cv2.INTER_LINEAR)
             ret, buf = cv2.imencode(".jpg", resized, [int(cv2.IMWRITE_JPEG_QUALITY), 78])
             if ret:
-                self.frames[cam_id] = buf.tobytes()
+                frame_bytes = buf.tobytes()
+                self.frames[cam_id] = frame_bytes
+                num_part = cam_id.replace("CAM-", "")
+                self.frames[num_part] = frame_bytes
+                try:
+                    self.frames[str(int(num_part))] = frame_bytes
+                except ValueError:
+                    pass
 
             time.sleep(frame_delay)
 
@@ -146,18 +201,13 @@ class CameraStreamHub:
         Returns latest JPEG bytes strictly for this camera.
         Never falls back to another camera feed.
         """
+        if not cam_id:
+            return None
+        canonical = to_canonical_cam_id(cam_id)
+        if canonical in self.frames:
+            return self.frames[canonical]
         if cam_id in self.frames:
             return self.frames[cam_id]
-
-        padded = f"{int(cam_id):02d}" if cam_id.isdigit() else cam_id
-        if padded in self.frames:
-            return self.frames[padded]
-
-        norm = normalize_camera_id(cam_id)
-        if norm in self.frames:
-            return self.frames[norm]
-
-        # Explicitly return None if no frame is decoded yet or offline
         return None
 
 
@@ -256,8 +306,10 @@ def init_db():
 
     # Baseline SQLite Persistence: Seed Signal Junction 01 and CAM 01-16 if empty.
     # Any user modifications, additions, and deletions persist across page reloads.
-    c.execute("SELECT COUNT(*) FROM junctions")
-    if c.fetchone()[0] == 0:
+    # Baseline SQLite Persistence: Ensure JUNC-01 and CAM-01 to CAM-16 exist.
+    # Any user modifications, additions, and deletions persist across page reloads.
+    c.execute("SELECT id FROM junctions WHERE id = 'JUNC-01'")
+    if not c.fetchone():
         c.execute("""
             INSERT INTO junctions (id, name, type, latitude, longitude, location, signal_type, description)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -272,34 +324,35 @@ def init_db():
             "4-Way Adaptive Signal Junction with Sequential Dynamic Handover"
         ))
 
-    c.execute("SELECT COUNT(*) FROM cameras")
-    if c.fetchone()[0] == 0:
-        seed_cameras = [
-            # Normal situation CAM 01 to 04 (associated to JUNC-01)
-            ("CAM-01", "CAM-01 (Normal Situation Camera 1)", "junction_camera", 10.791500, 78.704700, "Signal Junction 01 (North Approach)", "JUNC-01", "North", "CCTV", "CAM-01", "ONLINE", "Normal traffic flow - North Approach", "NORMAL", 22, 6, "GREEN"),
-            ("CAM-02", "CAM-02 (Normal Situation Camera 2)", "junction_camera", 10.790500, 78.705700, "Signal Junction 01 (East Approach)", "JUNC-01", "East", "CCTV", "CAM-02", "ONLINE", "Normal traffic flow - East Approach", "NORMAL", 16, 4, "RED"),
-            ("CAM-03", "CAM-03 (Normal Situation Camera 3)", "junction_camera", 10.789500, 78.704700, "Signal Junction 01 (South Approach)", "JUNC-01", "South", "CCTV", "CAM-03", "ONLINE", "Normal traffic flow - South Approach", "NORMAL", 28, 8, "RED"),
-            ("CAM-04", "CAM-04 (Normal Situation Camera 4)", "junction_camera", 10.790500, 78.703700, "Signal Junction 01 (West Approach)", "JUNC-01", "West", "CCTV", "CAM-04", "ONLINE", "Normal traffic flow - West Approach", "NORMAL", 19, 5, "RED"),
-            # Ambulance situation CAM 05 to 08
-            ("CAM-05", "CAM-05 (Ambulance Situation Camera 1)", "normal", 10.782000, 78.692000, "Emergency Corridor 1", None, "North", "CCTV", "CAM-05", "ONLINE", "Ambulance priority monitoring 1", "EMERGENCY_CORRIDOR", 12, 2, "GREEN"),
-            ("CAM-06", "CAM-06 (Ambulance Situation Camera 2)", "normal", 10.783000, 78.693000, "Emergency Corridor 2", None, "East", "CCTV", "CAM-06", "ONLINE", "Ambulance priority monitoring 2", "EMERGENCY_CORRIDOR", 14, 3, "GREEN"),
-            ("CAM-07", "CAM-07 (Ambulance Situation Camera 3)", "normal", 10.781000, 78.691000, "Emergency Corridor 3", None, "South", "CCTV", "CAM-07", "ONLINE", "Ambulance priority monitoring 3", "EMERGENCY_CORRIDOR", 15, 3, "GREEN"),
-            ("CAM-08", "CAM-08 (Ambulance Situation Camera 4)", "normal", 10.780000, 78.690000, "Emergency Corridor 4", None, "West", "CCTV", "CAM-08", "ONLINE", "Ambulance priority monitoring 4", "EMERGENCY_CORRIDOR", 11, 2, "GREEN"),
-            # ANPR CAM 09 to 16
-            ("CAM-09", "CAM-09 (ANPR Camera 1)", "normal", 10.795000, 78.685000, "ANPR Surveillance 1", None, "North", "ANPR", "CAM-09", "ONLINE", "ANPR plate detection & speed monitoring 1", "SURVEILLANCE", 18, 4, "GREEN"),
-            ("CAM-10", "CAM-10 (ANPR Camera 2)", "normal", 10.796000, 78.686000, "ANPR Surveillance 2", None, "East", "ANPR", "CAM-10", "ONLINE", "ANPR plate detection & speed monitoring 2", "SURVEILLANCE", 20, 5, "GREEN"),
-            ("CAM-11", "CAM-11 (ANPR Camera 3)", "normal", 10.794000, 78.684000, "ANPR Surveillance 3", None, "South", "ANPR", "CAM-11", "ONLINE", "ANPR plate detection & speed monitoring 3", "SURVEILLANCE", 14, 3, "GREEN"),
-            ("CAM-12", "CAM-12 (ANPR Camera 4)", "normal", 10.793000, 78.683000, "ANPR Surveillance 4", None, "West", "ANPR", "CAM-12", "ONLINE", "ANPR plate detection & speed monitoring 4", "SURVEILLANCE", 17, 4, "GREEN"),
-            ("CAM-13", "CAM-13 (ANPR Camera 5)", "normal", 10.788000, 78.698000, "ANPR Surveillance 5", None, "North", "ANPR", "CAM-13", "ONLINE", "ANPR plate detection & speed monitoring 5", "SURVEILLANCE", 21, 5, "GREEN"),
-            ("CAM-14", "CAM-14 (ANPR Camera 6)", "normal", 10.789000, 78.699000, "ANPR Surveillance 6", None, "East", "ANPR", "CAM-14", "ONLINE", "ANPR plate detection & speed monitoring 6", "SURVEILLANCE", 19, 4, "GREEN"),
-            ("CAM-15", "CAM-15 (ANPR Camera 7)", "normal", 10.787000, 78.697000, "ANPR Surveillance 7", None, "South", "ANPR", "CAM-15", "ONLINE", "ANPR plate detection & speed monitoring 7", "SURVEILLANCE", 16, 3, "GREEN"),
-            ("CAM-16", "CAM-16 (ANPR Camera 8)", "normal", 10.786000, 78.696000, "ANPR Surveillance 8", None, "West", "ANPR", "CAM-16", "ONLINE", "ANPR plate detection & speed monitoring 8", "SURVEILLANCE", 23, 6, "GREEN")
-        ]
-        c.executemany("""
-            INSERT INTO cameras (
+    seed_cameras = [
+        # Normal situation CAM 01 to 04 (associated to JUNC-01)
+        ("CAM-01", "CAM-01 (Normal Situation Camera 1)", "junction_camera", 10.791500, 78.704700, "Signal Junction 01 (North Approach)", "JUNC-01", "North", "CCTV", "CAM-01", "ONLINE", "Normal traffic flow - North Approach", "NORMAL", 22, 6, "GREEN"),
+        ("CAM-02", "CAM-02 (Normal Situation Camera 2)", "junction_camera", 10.790500, 78.705700, "Signal Junction 01 (East Approach)", "JUNC-01", "East", "CCTV", "CAM-02", "ONLINE", "Normal traffic flow - East Approach", "NORMAL", 16, 4, "RED"),
+        ("CAM-03", "CAM-03 (Normal Situation Camera 3)", "junction_camera", 10.789500, 78.704700, "Signal Junction 01 (South Approach)", "JUNC-01", "South", "CCTV", "CAM-03", "ONLINE", "Normal traffic flow - South Approach", "NORMAL", 28, 8, "RED"),
+        ("CAM-04", "CAM-04 (Normal Situation Camera 4)", "junction_camera", 10.790500, 78.703700, "Signal Junction 01 (West Approach)", "JUNC-01", "West", "CCTV", "CAM-04", "ONLINE", "Normal traffic flow - West Approach", "NORMAL", 19, 5, "RED"),
+        # Ambulance situation CAM 05 to 08
+        ("CAM-05", "CAM-05 (Ambulance Situation Camera 1)", "normal", 10.782000, 78.692000, "Emergency Corridor 1", None, "North", "CCTV", "CAM-05", "ONLINE", "Ambulance priority monitoring 1", "EMERGENCY_CORRIDOR", 12, 2, "GREEN"),
+        ("CAM-06", "CAM-06 (Ambulance Situation Camera 2)", "normal", 10.783000, 78.693000, "Emergency Corridor 2", None, "East", "CCTV", "CAM-06", "ONLINE", "Ambulance priority monitoring 2", "EMERGENCY_CORRIDOR", 14, 3, "GREEN"),
+        ("CAM-07", "CAM-07 (Ambulance Situation Camera 3)", "normal", 10.781000, 78.691000, "Emergency Corridor 3", None, "South", "CCTV", "CAM-07", "ONLINE", "Ambulance priority monitoring 3", "EMERGENCY_CORRIDOR", 15, 3, "GREEN"),
+        ("CAM-08", "CAM-08 (Ambulance Situation Camera 4)", "normal", 10.780000, 78.690000, "Emergency Corridor 4", None, "West", "CCTV", "CAM-08", "ONLINE", "Ambulance priority monitoring 4", "EMERGENCY_CORRIDOR", 11, 2, "GREEN"),
+        # ANPR CAM 09 to 16
+        ("CAM-09", "CAM-09 (ANPR Camera 1)", "normal", 10.795000, 78.685000, "ANPR Surveillance 1", None, "North", "ANPR", "CAM-09", "ONLINE", "ANPR plate detection & speed monitoring 1", "SURVEILLANCE", 18, 4, "GREEN"),
+        ("CAM-10", "CAM-10 (ANPR Camera 2)", "normal", 10.796000, 78.686000, "ANPR Surveillance 2", None, "East", "ANPR", "CAM-10", "ONLINE", "ANPR plate detection & speed monitoring 2", "SURVEILLANCE", 20, 5, "GREEN"),
+        ("CAM-11", "CAM-11 (ANPR Camera 3)", "normal", 10.794000, 78.684000, "ANPR Surveillance 3", None, "South", "ANPR", "CAM-11", "ONLINE", "ANPR plate detection & speed monitoring 3", "SURVEILLANCE", 14, 3, "GREEN"),
+        ("CAM-12", "CAM-12 (ANPR Camera 4)", "normal", 10.793000, 78.683000, "ANPR Surveillance 4", None, "West", "ANPR", "CAM-12", "ONLINE", "ANPR plate detection & speed monitoring 4", "SURVEILLANCE", 17, 4, "GREEN"),
+        ("CAM-13", "CAM-13 (ANPR Camera 5)", "normal", 10.788000, 78.698000, "ANPR Surveillance 5", None, "North", "ANPR", "CAM-13", "ONLINE", "ANPR plate detection & speed monitoring 5", "SURVEILLANCE", 21, 5, "GREEN"),
+        ("CAM-14", "CAM-14 (ANPR Camera 6)", "normal", 10.789000, 78.699000, "ANPR Surveillance 6", None, "East", "ANPR", "CAM-14", "ONLINE", "ANPR plate detection & speed monitoring 6", "SURVEILLANCE", 19, 4, "GREEN"),
+        ("CAM-15", "CAM-15 (ANPR Camera 7)", "normal", 10.787000, 78.697000, "ANPR Surveillance 7", None, "South", "ANPR", "CAM-15", "ONLINE", "ANPR plate detection & speed monitoring 7", "SURVEILLANCE", 16, 3, "GREEN"),
+        ("CAM-16", "CAM-16 (ANPR Camera 8)", "normal", 10.786000, 78.696000, "ANPR Surveillance 8", None, "West", "ANPR", "CAM-16", "ONLINE", "ANPR plate detection & speed monitoring 8", "SURVEILLANCE", 23, 6, "GREEN")
+    ]
+    for cam in seed_cameras:
+        c.execute("""
+            INSERT OR IGNORE INTO cameras (
                 id, name, type, latitude, longitude, location, junction_id, direction, camera_type, video_source, status, description, zone, count, queue, signal, plate, is_ambulance, is_missing
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', 0, 0)
-        """, seed_cameras)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, 0)
+        """, (
+            cam[0], cam[1], cam[2], cam[3], cam[4], cam[5], cam[6], cam[7], cam[8], cam[9], cam[10], cam[11], cam[12], cam[13], cam[14], cam[15], 1 if cam[0] == "CAM-07" else 0
+        ))
 
     # 3. Authorized FIR Cases Registry (Law Enforcement Inquiries & Warrants)
     c.execute("""
@@ -1087,18 +1140,7 @@ def get_junction_detail(junction_id: str):
 
 
 def normalize_camera_id(camera_id: str) -> str:
-    if not camera_id:
-        return "01"
-    # Handle basenames if path was provided
-    s = str(camera_id).split("/")[-1].split("\\")[-1]
-    s = s.lower().replace("camera_", "").replace("cam", "").replace("_", "").replace("-", "").strip()
-    if s.endswith(".mp4"):
-        s = s[:-4]
-    try:
-        idx = int(s)
-        return f"{idx:02d}"
-    except ValueError:
-        return s
+    return to_canonical_cam_id(camera_id)
 
 
 @app.get("/")
@@ -1204,55 +1246,79 @@ def select_scenario(scenario: str = Query(..., description="Scenario ID: normal,
 @app.get("/api/cameras/status")
 def get_cameras_status() -> Dict[str, Any]:
     status_report: Dict[str, Any] = {}
-    for cam_id, meta in CAMERA_VIDEO_MAP.items():
-        file_path = meta["path"]
+    for i in range(1, 17):
+        cam_id = f"CAM-{i:02d}"
+        file_path = CAMERA_VIDEOS_DIR / f"{cam_id}.mp4"
         is_available = file_path.is_file()
-
+        group = get_camera_group(cam_id)
         info: Dict[str, Any] = {
-            "name": meta["name"],
-            "approach": meta["approach"],
+            "name": cam_id,
+            "approach": f"Approach {((i-1)%4)+1}",
             "status": "online" if is_available else "offline",
-            "source": str(file_path.relative_to(PROJECT_ROOT)).replace("\\", "/"),
-            "type": meta["type"],
-            "scenario": meta["type"],
+            "source": f"data/camera_videos/{cam_id}.mp4",
+            "type": group.lower(),
+            "scenario": group.lower(),
+            "group": group,
             "resolution": "1920x1080",
             "fps": 24.0
         }
+        status_report[f"camera_{i:02d}"] = info
         status_report[f"camera_{cam_id}"] = info
+        status_report[cam_id] = info
+        status_report[f"{i:02d}"] = info
 
     return status_report
 
 
 @app.get("/api/video/camera/{camera_id}")
 async def stream_camera(camera_id: str, request: Request):
-    # Lookup designated video_source from SQLite cameras table if registered
-    target_feed = camera_id
-    try:
-        conn = get_db_connection()
-        c = conn.cursor()
-        c.execute("SELECT video_source FROM cameras WHERE id = ? OR LOWER(id) = ?", (camera_id.strip().upper(), camera_id.strip().lower()))
-        row = c.fetchone()
-        conn.close()
-        if row and row["video_source"]:
-            target_feed = row["video_source"]
-    except Exception as e:
-        logger.warning(f"Error querying video_source for camera {camera_id}: {e}")
+    canonical_id = to_canonical_cam_id(camera_id)
+    group = get_camera_group(canonical_id)
+    video_path = get_authoritative_video_path(canonical_id)
 
-    norm_id = normalize_camera_id(target_feed)
+    # If camera_id is not directly in CAM-01..16, check DB for mapped approach video_source (e.g. CAM-17..CAM-20)
+    if video_path is None:
+        try:
+            conn = get_db_connection()
+            c = conn.cursor()
+            c.execute("SELECT video_source FROM cameras WHERE id = ? OR LOWER(id) = ?", (camera_id.strip().upper(), camera_id.strip().lower()))
+            row = c.fetchone()
+            conn.close()
+            if row and row["video_source"]:
+                source_id = to_canonical_cam_id(row["video_source"])
+                group = get_camera_group(source_id)
+                video_path = get_authoritative_video_path(source_id)
+                canonical_id = source_id
+        except Exception as e:
+            logger.warning(f"Error querying video_source for camera {camera_id}: {e}")
+
+    # Debug logging strictly as required
+    logger.info(f"[CAMERA] Requested: {camera_id}")
+    logger.info(f"[CAMERA] Group: {group}")
+    logger.info(f"[CAMERA] Video: {video_path}")
+    print(f"[CAMERA] Requested: {camera_id}", flush=True)
+    print(f"[CAMERA] Group: {group}", flush=True)
+    print(f"[CAMERA] Video: {video_path}", flush=True)
+
+    if video_path is None or not video_path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail=f"{canonical_id} video unavailable"
+        )
 
     # Check if frame is ready, or wait up to 1.5s for initial decode
-    frame = stream_hub.get_frame(norm_id)
+    frame = stream_hub.get_frame(canonical_id)
     if frame is None:
         for _ in range(15):
             await asyncio.sleep(0.1)
-            frame = stream_hub.get_frame(norm_id)
+            frame = stream_hub.get_frame(canonical_id)
             if frame is not None:
                 break
 
     if frame is None:
         raise HTTPException(
             status_code=404,
-            detail=f"Camera video for '{camera_id}' is not available."
+            detail=f"{canonical_id} video unavailable"
         )
 
     async def frame_stream():
@@ -1261,7 +1327,7 @@ async def stream_camera(camera_id: str, request: Request):
             if await request.is_disconnected():
                 break
 
-            frame_bytes = stream_hub.get_frame(norm_id)
+            frame_bytes = stream_hub.get_frame(canonical_id)
             if frame_bytes is not None and frame_bytes is not last_yielded:
                 last_yielded = frame_bytes
                 yield (
@@ -1292,24 +1358,52 @@ async def get_camera_single_frame(camera_id: str):
     Returns the latest single JPEG snapshot for a camera feed.
     Ideal for lightweight single-frame views and fallback reconnects without holding sockets open.
     """
-    target_feed = camera_id
-    try:
-        conn = get_db_connection()
-        c = conn.cursor()
-        c.execute("SELECT video_source FROM cameras WHERE id = ? OR LOWER(id) = ?", (camera_id.strip().upper(), camera_id.strip().lower()))
-        row = c.fetchone()
-        conn.close()
-        if row and row["video_source"]:
-            target_feed = row["video_source"]
-    except Exception as e:
-        logger.warning(f"Error querying video_source for camera {camera_id}: {e}")
+    canonical_id = to_canonical_cam_id(camera_id)
+    group = get_camera_group(canonical_id)
+    video_path = get_authoritative_video_path(canonical_id)
 
-    norm_id = normalize_camera_id(target_feed)
-    frame = stream_hub.get_frame(norm_id)
+    # If camera_id is not directly in CAM-01..16, check DB for mapped approach video_source (e.g. CAM-17..CAM-20)
+    if video_path is None:
+        try:
+            conn = get_db_connection()
+            c = conn.cursor()
+            c.execute("SELECT video_source FROM cameras WHERE id = ? OR LOWER(id) = ?", (camera_id.strip().upper(), camera_id.strip().lower()))
+            row = c.fetchone()
+            conn.close()
+            if row and row["video_source"]:
+                source_id = to_canonical_cam_id(row["video_source"])
+                group = get_camera_group(source_id)
+                video_path = get_authoritative_video_path(source_id)
+                canonical_id = source_id
+        except Exception as e:
+            logger.warning(f"Error querying video_source for camera {camera_id}: {e}")
+
+    # Debug logging strictly as required
+    logger.info(f"[CAMERA] Requested: {camera_id}")
+    logger.info(f"[CAMERA] Group: {group}")
+    logger.info(f"[CAMERA] Video: {video_path}")
+    print(f"[CAMERA] Requested: {camera_id}", flush=True)
+    print(f"[CAMERA] Group: {group}", flush=True)
+    print(f"[CAMERA] Video: {video_path}", flush=True)
+
+    if video_path is None or not video_path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail=f"{canonical_id} video unavailable"
+        )
+
+    frame = stream_hub.get_frame(canonical_id)
+    if frame is None:
+        for _ in range(15):
+            await asyncio.sleep(0.1)
+            frame = stream_hub.get_frame(canonical_id)
+            if frame is not None:
+                break
+
     if frame is None:
         raise HTTPException(
             status_code=404,
-            detail=f"Camera video frame for '{camera_id}' is not available."
+            detail=f"{canonical_id} video unavailable"
         )
 
     return Response(

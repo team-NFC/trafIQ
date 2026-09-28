@@ -33,7 +33,7 @@ DB_PATH = PROJECT_ROOT / "data" / "trafficiq.db"
 ANPR_REGISTRY: Dict[str, Dict[str, Any]] = {
     "CAM-01": {"plate": "TN 45 BB 7890", "cls": "car", "conf": 0.996, "speed_kmh": 42.5},
     "CAM-02": {"plate": "TN 45 BB 7890", "cls": "car", "conf": 0.998, "speed_kmh": 39.8},
-    "CAM-03": {"plate": "TN 45 AU 4608", "cls": "ambulance", "conf": 0.992, "speed_kmh": 68.2},
+    "CAM-03": {"plate": "TN 45 BB 7890", "cls": "car", "conf": 0.995, "speed_kmh": 43.5},
     "CAM-04": {"plate": "TN 45 BB 7890", "cls": "car", "conf": 0.997, "speed_kmh": 44.1},
     "CAM-05": {"plate": "TN 45 BB 7890", "cls": "car", "conf": 0.998, "speed_kmh": 41.2},
     "CAM-06": {"plate": "TN 45 AX 1024", "cls": "bus", "conf": 0.985, "speed_kmh": 31.0},
