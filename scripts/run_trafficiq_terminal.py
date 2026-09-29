@@ -34,18 +34,20 @@ from traffic.tracking import VehicleTracker
 from traffic.counting import TrafficCounter
 from situations.ambulance_situation.ambulance_priority import AmbulancePriorityController
 
-# Default camera approach metadata
-CAMERA_APPROACHES = {
-    "camera_01": {"display": "CAM01", "approach": "North Approach"},
-    "camera_02": {"display": "CAM02", "approach": "East Approach"},
-    "camera_03": {"display": "CAM03", "approach": "South Approach"},
-    "camera_04": {"display": "CAM04", "approach": "West Approach"},
-}
+# Default camera approach metadata definitions
+RAW_CAMERA_APPROACH_DEFS = [
+    ("camera_01", "CAM-01", "North Approach"),
+    ("camera_02.1", "CAM-02.1", "East (Near Section - 54.6m)"),
+    ("camera_02.2", "CAM-02.2", "East (Far Section - 218.5m)"),
+    ("camera_02", "CAM-02", "East Approach"),
+    ("camera_03", "CAM-03", "South Approach"),
+    ("camera_04", "CAM-04", "West Approach"),
+]
 
 
 class TrafficIQTerminalRunner:
     """
-    Orchestrates the 4-camera real-time traffic detection, tracking, counting,
+    Orchestrates the multi-camera real-time traffic detection, tracking, counting,
     and signal preemption simulation with clean terminal display.
     """
 
@@ -94,6 +96,17 @@ class TrafficIQTerminalRunner:
         else:
             self.video_dir = PROJECT_ROOT / "situations" / "normal_situation" / "videos"
 
+        # Dynamically resolve available camera video files
+        self.camera_approaches: Dict[str, Dict[str, str]] = {}
+        seen = set()
+        for fname, disp, appr in RAW_CAMERA_APPROACH_DEFS:
+            vfile = self.video_dir / f"{fname}.mp4"
+            if vfile.is_file():
+                if fname == "camera_02" and ("camera_02.1" in seen or "camera_02.2" in seen):
+                    continue
+                self.camera_approaches[fname] = {"display": disp, "approach": appr}
+                seen.add(fname)
+
         # Signal controller configuration
         self.signal_config = signal_config_path or str(PROJECT_ROOT / "config" / "signal_config.json")
         self.signal_controller = AmbulancePriorityController(
@@ -107,21 +120,21 @@ class TrafficIQTerminalRunner:
             clearance_cooldown_seconds=1.5,
         )
 
-        # Setup 4 independent camera pipelines
+        # Setup independent camera pipelines
         self.cameras: Dict[str, Dict[str, Any]] = {}
         self._init_camera_pipelines()
 
     def _init_camera_pipelines(self):
-        print(f"\n[TrafficIQ] Initializing 4 Camera Pipelines (Situation: {self.situation.upper()})")
+        print(f"\n[TrafficIQ] Initializing Camera Pipelines (Situation: {self.situation.upper()})")
         print(f"[TrafficIQ] Video Source Dir : {self.video_dir}")
         print(f"[TrafficIQ] YOLO Model       : {self.weights_path.name}")
         print(f"[TrafficIQ] Inference Device : {self.device_name} ({self.device})")
         print("-" * 65)
 
-        for cam_id, meta in CAMERA_APPROACHES.items():
+        for cam_id, meta in self.camera_approaches.items():
             video_file = self.video_dir / f"{cam_id}.mp4"
             if not video_file.is_file():
-                raise FileNotFoundError(f"Video file missing for {cam_id}: {video_file}")
+                continue
 
             cap = cv2.VideoCapture(str(video_file))
             if not cap.isOpened():

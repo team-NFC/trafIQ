@@ -818,6 +818,16 @@ export const CesiumGlobe: React.FC<CesiumGlobeProps> = ({
             ? `🔴 ${cam.id}`
             : `📷 ${cam.id}`);
 
+      // Custom distinction for CAM-02.1 and CAM-02.2 multi-camera sub-cameras
+      let labelOffset = new Cesium.Cartesian2(0, -20);
+      if (cam.id === 'CAM-02.1') {
+        labelText = `📷 CAM-02.1 (Near / Stopline)`;
+        labelOffset = new Cesium.Cartesian2(0, -24); // Offset above
+      } else if (cam.id === 'CAM-02.2') {
+        labelText = `📷 CAM-02.2 (Far / Extended Queue)`;
+        labelOffset = new Cesium.Cartesian2(0, 24);  // Offset below to prevent overlap
+      }
+
       if (cam.has_database_alert) {
         labelText = `🚨 ${cam.id} [DB MATCH]`;
       } else if (cam.is_ambulance && activeScenario === 'ambulance') {
@@ -859,7 +869,7 @@ export const CesiumGlobe: React.FC<CesiumGlobeProps> = ({
             fillColor: Cesium.Color.WHITE,
             showBackground: true,
             backgroundColor: Cesium.Color.fromCssColorString('rgba(11, 16, 26, 0.85)'),
-            pixelOffset: new Cesium.Cartesian2(0, -20),
+            pixelOffset: labelOffset,
             horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
             distanceDisplayCondition: labelCondition
           },
@@ -881,6 +891,7 @@ export const CesiumGlobe: React.FC<CesiumGlobeProps> = ({
         }
         if (entity.label) {
           entity.label.text = new Cesium.ConstantProperty(labelText) as any;
+          entity.label.pixelOffset = new Cesium.ConstantProperty(labelOffset) as any;
           entity.label.distanceDisplayCondition = new Cesium.ConstantProperty(labelCondition) as any;
         }
         entity.properties = new Cesium.PropertyBag({
@@ -1055,6 +1066,56 @@ export const CesiumGlobe: React.FC<CesiumGlobeProps> = ({
 
       linkEntitiesRef.current.push(linkEntity);
     });
+
+    // 7.1 Render Logical CAM-02 Extended Queue Coverage Overlay Badge & Corridor Label
+    const cam02a = camLookup.get('CAM-02.1');
+    const cam02b = camLookup.get('CAM-02.2');
+    if (cam02a && cam02b) {
+      const midLon = (cam02a.longitude + cam02b.longitude) / 2.0;
+      const midLat = (cam02a.latitude + cam02b.latitude) / 2.0;
+
+      // Find master logical CAM-02 if available
+      const logicalCam02 = effectiveCameras.find(c => c.id === 'CAM-02') || {
+        id: 'CAM-02',
+        name: 'CAM-02 (Logical Approach - South Corridor)',
+        is_multi_camera: true,
+        sub_cameras: [
+          { id: 'CAM-02.1', name: 'CAM-02.1 (Near Section)', latitude: cam02a.latitude, longitude: cam02a.longitude, distance_m: 55, status: 'ONLINE', has_video: true, count: cam02a.count || 16, queue: 5, pcu: 17.5 },
+          { id: 'CAM-02.2', name: 'CAM-02.2 (Far Section)', latitude: cam02b.latitude, longitude: cam02b.longitude, distance_m: 220, status: 'ONLINE', has_video: true, count: cam02b.count || 15, queue: 3, pcu: 15.7 }
+        ],
+        latitude: midLat,
+        longitude: midLon,
+        status: 'ONLINE',
+        count: (cam02a.count || 16) + (cam02b.count || 15),
+        queue: 8,
+        signal: cam02a.signal || 'RED'
+      };
+
+      const cam02LabelEntity = viewer.entities.add({
+        id: 'logical-cam-02-queue-overlay',
+        name: 'CAM-02 Extended Queue Coverage',
+        position: Cesium.Cartesian3.fromDegrees(midLon, midLat, 18),
+        label: {
+          text: 'CAM-02\nExtended Queue Coverage',
+          font: 'bold 10px JetBrains Mono, monospace',
+          fillColor: Cesium.Color.fromCssColorString('#38bdf8'),
+          showBackground: true,
+          backgroundColor: Cesium.Color.fromCssColorString('rgba(8, 25, 45, 0.90)'),
+          outlineColor: Cesium.Color.fromCssColorString('rgba(56, 189, 248, 0.6)'),
+          outlineWidth: 1.5,
+          pixelOffset: new Cesium.Cartesian2(0, 0),
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          verticalOrigin: Cesium.VerticalOrigin.CENTER,
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0.0, 30000.0)
+        },
+        properties: {
+          entityType: 'camera',
+          camera: logicalCam02
+        }
+      });
+
+      linkEntitiesRef.current.push(cam02LabelEntity);
+    }
   }, [effectiveCameras, links, activeScenario, layers.roadLinks]);
 
   // 8. Selected Location Pin Marker (when clicking ground or searching location)

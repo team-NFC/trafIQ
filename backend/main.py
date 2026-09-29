@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import math
 import os
 import re
 import secrets
@@ -66,19 +67,38 @@ CAMERA_GROUPS: Dict[str, str] = {
 
 def to_canonical_cam_id(camera_id: str) -> str:
     """
-    Normalizes any camera reference to canonical CAM-XX format (e.g. CAM-01, CAM-02).
+    Normalizes any camera reference to canonical CAM-XX or sub-camera CAM-XX.Y format (e.g. CAM-01, CAM-02, CAM-02.1, CAM-02.2).
     """
     if not camera_id:
-        return "CAM-01"
+        return ""
     s = str(camera_id).split("/")[-1].split("\\")[-1].strip()
     if s.lower().endswith(".mp4"):
         s = s[:-4]
     clean = s.upper().replace("CAMERA_", "CAM-").replace("CAMERA-", "CAM-").replace("CAMERA", "CAM-").replace("_", "-")
+    m_sub = re.search(r"CAM-?(\d+)[._-](\d+)", clean)
+    if m_sub:
+        p1 = int(m_sub.group(1))
+        p2 = int(m_sub.group(2))
+        return f"CAM-{p1:02d}.{p2}"
     m = re.search(r"(\d+)", clean)
     if m:
         num = int(m.group(1))
         return f"CAM-{num:02d}"
     return clean
+
+def calculate_haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Calculates distance in meters between two GPS coordinates using Haversine formula."""
+    try:
+        R = 6371000.0
+        phi1 = math.radians(float(lat1))
+        phi2 = math.radians(float(lat2))
+        delta_phi = math.radians(float(lat2) - float(lat1))
+        delta_lambda = math.radians(float(lon2) - float(lon1))
+        a = math.sin(delta_phi / 2.0)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2.0)**2
+        c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
+        return round(R * c, 1)
+    except Exception:
+        return 0.0
 
 def normalize_plate_string(plate: Optional[str]) -> str:
     """Normalizes license plate: uppercase, stripped of spaces, dashes, dots."""
@@ -98,13 +118,33 @@ def get_camera_group(camera_id: str, zone: Optional[str] = None, camera_type: Op
 
 def get_authoritative_video_path(camera_id: str) -> Optional[Path]:
     """
-    Authoritative 1-to-1 video path resolver strictly for data/camera_videos/CAM-XX.mp4.
-    Never falls back to another camera's video or another directory.
+    Authoritative 1-to-1 video path resolver strictly for camera videos.
+    Supports baseline CAM-01..CAM-16 as well as sub-cameras like CAM-02.1 and CAM-02.2.
     """
     cid = to_canonical_cam_id(camera_id)
-    target = CAMERA_VIDEOS_DIR / f"{cid}.mp4"
-    if target.is_file():
-        return target
+    if not cid:
+        return None
+
+    cand_norm = CAMERA_VIDEOS_DIR / "normal" / f"{cid}.mp4"
+    if cand_norm.is_file():
+        return cand_norm
+
+    cand_main = CAMERA_VIDEOS_DIR / f"{cid}.mp4"
+    if cand_main.is_file():
+        return cand_main
+
+    if "." in cid:
+        hyphen_cid = cid.replace(".", "-")
+        cand_norm_hyphen = CAMERA_VIDEOS_DIR / "normal" / f"{hyphen_cid}.mp4"
+        if cand_norm_hyphen.is_file():
+            return cand_norm_hyphen
+        cand_main_hyphen = CAMERA_VIDEOS_DIR / f"{hyphen_cid}.mp4"
+        if cand_main_hyphen.is_file():
+            return cand_main_hyphen
+        cand_sit = PROJECT_ROOT / "situations" / "normal_situation" / "videos" / f"camera_{cid.replace('CAM-', '').lower()}.mp4"
+        if cand_sit.is_file():
+            return cand_sit
+
     return None
 
 def get_camera_traffic_data(camera_id: str, video_source: Optional[str] = None) -> Dict[str, Any]:
@@ -227,10 +267,10 @@ class CameraStreamHub:
             if self.running:
                 return
             self.running = True
-            for i in range(1, 17):
-                cam_id = f"CAM-{i:02d}"
-                video_path = CAMERA_VIDEOS_DIR / f"{cam_id}.mp4"
-                if video_path.is_file():
+            cams_to_stream = [f"CAM-{i:02d}" for i in range(1, 17)] + ["CAM-02.1", "CAM-02.2"]
+            for cam_id in cams_to_stream:
+                video_path = get_authoritative_video_path(cam_id)
+                if video_path and video_path.is_file():
                     t = threading.Thread(
                         target=self._worker,
                         args=(cam_id, video_path),
@@ -287,7 +327,7 @@ class CameraStreamHub:
     def get_frame(self, cam_id: str) -> Optional[bytes]:
         """
         Returns latest JPEG bytes strictly for this camera.
-        Never falls back to another camera feed.
+        If frame not yet in memory, decodes on-the-fly from authoritative video path.
         """
         if not cam_id:
             return None
@@ -296,7 +336,27 @@ class CameraStreamHub:
             return self.frames[canonical]
         if cam_id in self.frames:
             return self.frames[cam_id]
+
+        # On-demand frame decode fallback for robust video streaming
+        vpath = get_authoritative_video_path(canonical) or get_authoritative_video_path(cam_id)
+        if vpath and vpath.is_file():
+            try:
+                cap = cv2.VideoCapture(str(vpath))
+                if cap.isOpened():
+                    ret, frame = cap.read()
+                    cap.release()
+                    if ret and frame is not None:
+                        resized = cv2.resize(frame, (768, 432), interpolation=cv2.INTER_LINEAR)
+                        enc_ok, buf = cv2.imencode(".jpg", resized, [int(cv2.IMWRITE_JPEG_QUALITY), 78])
+                        if enc_ok:
+                            fb = buf.tobytes()
+                            self.frames[canonical] = fb
+                            self.frames[cam_id] = fb
+                            return fb
+            except Exception as e:
+                logger.warning(f"On-demand frame decode failed for {cam_id}: {e}")
         return None
+
 
 
 # Global instances
@@ -336,6 +396,46 @@ def get_db_connection() -> sqlite3.Connection:
     conn.execute("PRAGMA busy_timeout = 5000;")
     conn.row_factory = sqlite3.Row
     return conn
+
+def ensure_seed_cameras(conn: sqlite3.Connection):
+    c = conn.cursor()
+    seed_cameras = [
+        # ANPR CAM 09 to 16
+        ("CAM-09", "CAM-09 (ANPR Surveillance 1)", "normal", 10.795000, 78.685000, "ANPR Surveillance 1", None, "North", "ANPR", "CAM-09", "ONLINE", "ANPR plate detection & speed monitoring 1", "SURVEILLANCE", 28, 6, "GREEN"),
+        ("CAM-10", "CAM-10 (ANPR Surveillance 2)", "normal", 10.796000, 78.686000, "ANPR Surveillance 2", None, "East", "ANPR", "CAM-10", "ONLINE", "ANPR plate detection & speed monitoring 2", "SURVEILLANCE", 30, 7, "GREEN"),
+        ("CAM-11", "CAM-11 (ANPR Surveillance 3)", "normal", 10.794000, 78.684000, "ANPR Surveillance 3", None, "South", "ANPR", "CAM-11", "ONLINE", "ANPR plate detection & speed monitoring 3", "SURVEILLANCE", 22, 5, "GREEN"),
+        ("CAM-12", "CAM-12 (ANPR Surveillance 4)", "normal", 10.793000, 78.683000, "ANPR Surveillance 4", None, "West", "ANPR", "CAM-12", "ONLINE", "ANPR plate detection & speed monitoring 4", "SURVEILLANCE", 29, 6, "GREEN"),
+        ("CAM-13", "CAM-13 (ANPR Surveillance 5)", "normal", 10.788000, 78.698000, "ANPR Surveillance 5", None, "North", "ANPR", "CAM-13", "ONLINE", "ANPR plate detection & speed monitoring 5", "SURVEILLANCE", 27, 6, "GREEN"),
+        ("CAM-14", "CAM-14 (ANPR Surveillance 6)", "normal", 10.789000, 78.699000, "ANPR Surveillance 6", None, "East", "ANPR", "CAM-14", "ONLINE", "ANPR plate detection & speed monitoring 6", "SURVEILLANCE", 25, 5, "GREEN"),
+        ("CAM-15", "CAM-15 (ANPR Surveillance 7)", "normal", 10.787000, 78.697000, "ANPR Surveillance 7", None, "South", "ANPR", "CAM-15", "ONLINE", "ANPR plate detection & speed monitoring 7", "SURVEILLANCE", 24, 5, "GREEN"),
+        ("CAM-16", "CAM-16 (ANPR Surveillance 8)", "normal", 10.786000, 78.696000, "ANPR Surveillance 8", None, "West", "ANPR", "CAM-16", "ONLINE", "ANPR plate detection & speed monitoring 8", "SURVEILLANCE", 32, 8, "GREEN"),
+    ]
+    for cam in seed_cameras:
+        cid = cam[0]
+        c.execute("SELECT id FROM cameras WHERE id = ?", (cid,))
+        if not c.fetchone():
+            c.execute("""
+                INSERT INTO cameras (
+                    id, name, type, latitude, longitude, location, junction_id, direction, camera_type, video_source, status, description, zone, count, queue, signal, plate, is_ambulance, is_missing
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, 0)
+            """, (
+                cam[0], cam[1], cam[2], cam[3], cam[4], cam[5], cam[6], cam[7], cam[8], cam[9], cam[10], cam[11], cam[12], cam[13], cam[14], cam[15], 1 if cam[0] == "CAM-07" else 0
+            ))
+
+        tdata = get_camera_traffic_data(cid, cam[9])
+        if tdata["has_analysis"]:
+            c.execute("""
+                UPDATE cameras
+                SET count = ?, queue = ?, plate = ?, is_ambulance = ?
+                WHERE id = ?
+            """, (
+                tdata["vehicle_count"],
+                tdata["queue_count"],
+                tdata["primary_plate"],
+                1 if (cid == "CAM-07" or tdata["vehicle_breakdown"].get("ambulance", 0) > 0) else 0,
+                cid
+            ))
+    conn.commit()
 
 def init_db():
     conn = get_db_connection()
@@ -392,86 +492,7 @@ def init_db():
         except Exception:
             pass
 
-    # Baseline SQLite Persistence: Ensure JUNC-01, JUNC-02, and CAM-01 to CAM-16 exist.
-    c.execute("SELECT id FROM junctions WHERE id = 'JUNC-01'")
-    if not c.fetchone():
-        c.execute("""
-            INSERT INTO junctions (id, name, type, latitude, longitude, location, signal_type, description)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            "JUNC-01",
-            "Signal Junction 01",
-            "signal",
-            10.790500,
-            78.704700,
-            "Signal Junction 01",
-            "Adaptive",
-            "4-Way Adaptive Signal Junction with Sequential Dynamic Handover"
-        ))
-
-    c.execute("SELECT id FROM junctions WHERE id = 'JUNC-02'")
-    if not c.fetchone():
-        c.execute("""
-            INSERT INTO junctions (id, name, type, latitude, longitude, location, signal_type, description)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            "JUNC-02",
-            "Signal Junction 02",
-            "signal",
-            10.781500,
-            78.691500,
-            "Signal Junction 02",
-            "Adaptive",
-            "4-Way Adaptive Signal Junction with Emergency Vehicle Preemption Corridor"
-        ))
-
-    seed_cameras = [
-        # Normal situation CAM 01 to 04 (associated to JUNC-01)
-        ("CAM-01", "CAM-01 (North Approach)", "junction_camera", 10.791500, 78.704700, "Signal Junction 01 (North Approach)", "JUNC-01", "North", "CCTV", "CAM-01", "ONLINE", "Normal traffic flow - North Approach", "NORMAL", 20, 5, "GREEN"),
-        ("CAM-02", "CAM-02 (East Approach)", "junction_camera", 10.790500, 78.705700, "Signal Junction 01 (East Approach)", "JUNC-01", "East", "CCTV", "CAM-02", "ONLINE", "Normal traffic flow - East Approach", "NORMAL", 31, 8, "RED"),
-        ("CAM-03", "CAM-03 (South Approach)", "junction_camera", 10.789500, 78.704700, "Signal Junction 01 (South Approach)", "JUNC-01", "South", "CCTV", "CAM-03", "ONLINE", "Normal traffic flow - South Approach", "NORMAL", 21, 8, "RED"),
-        ("CAM-04", "CAM-04 (West Approach)", "junction_camera", 10.790500, 78.703700, "Signal Junction 01 (West Approach)", "JUNC-01", "West", "CCTV", "CAM-04", "ONLINE", "Normal traffic flow - West Approach", "NORMAL", 21, 8, "RED"),
-        # Ambulance situation CAM 05 to 08 (associated to JUNC-02)
-        ("CAM-05", "CAM-05 (North Approach)", "junction_camera", 10.782000, 78.692000, "Signal Junction 02 (North Approach)", "JUNC-02", "North", "CCTV", "CAM-05", "ONLINE", "Ambulance priority monitoring 1", "EMERGENCY_CORRIDOR", 24, 6, "GREEN"),
-        ("CAM-06", "CAM-06 (East Approach)", "junction_camera", 10.783000, 78.693000, "Signal Junction 02 (East Approach)", "JUNC-02", "East", "CCTV", "CAM-06", "ONLINE", "Ambulance priority monitoring 2", "EMERGENCY_CORRIDOR", 22, 5, "GREEN"),
-        ("CAM-07", "CAM-07 (South Approach)", "junction_camera", 10.781000, 78.691000, "Signal Junction 02 (South Approach)", "JUNC-02", "South", "CCTV", "CAM-07", "ONLINE", "Ambulance priority monitoring 3", "EMERGENCY_CORRIDOR", 26, 7, "GREEN"),
-        ("CAM-08", "CAM-08 (West Approach)", "junction_camera", 10.780000, 78.690000, "Signal Junction 02 (West Approach)", "JUNC-02", "West", "CCTV", "CAM-08", "ONLINE", "Ambulance priority monitoring 4", "EMERGENCY_CORRIDOR", 20, 5, "GREEN"),
-        # ANPR CAM 09 to 16
-        ("CAM-09", "CAM-09 (ANPR Surveillance 1)", "normal", 10.795000, 78.685000, "ANPR Surveillance 1", None, "North", "ANPR", "CAM-09", "ONLINE", "ANPR plate detection & speed monitoring 1", "SURVEILLANCE", 28, 6, "GREEN"),
-        ("CAM-10", "CAM-10 (ANPR Surveillance 2)", "normal", 10.796000, 78.686000, "ANPR Surveillance 2", None, "East", "ANPR", "CAM-10", "ONLINE", "ANPR plate detection & speed monitoring 2", "SURVEILLANCE", 30, 7, "GREEN"),
-        ("CAM-11", "CAM-11 (ANPR Surveillance 3)", "normal", 10.794000, 78.684000, "ANPR Surveillance 3", None, "South", "ANPR", "CAM-11", "ONLINE", "ANPR plate detection & speed monitoring 3", "SURVEILLANCE", 22, 5, "GREEN"),
-        ("CAM-12", "CAM-12 (ANPR Surveillance 4)", "normal", 10.793000, 78.683000, "ANPR Surveillance 4", None, "West", "ANPR", "CAM-12", "ONLINE", "ANPR plate detection & speed monitoring 4", "SURVEILLANCE", 29, 6, "GREEN"),
-        ("CAM-13", "CAM-13 (ANPR Surveillance 5)", "normal", 10.788000, 78.698000, "ANPR Surveillance 5", None, "North", "ANPR", "CAM-13", "ONLINE", "ANPR plate detection & speed monitoring 5", "SURVEILLANCE", 27, 6, "GREEN"),
-        ("CAM-14", "CAM-14 (ANPR Surveillance 6)", "normal", 10.789000, 78.699000, "ANPR Surveillance 6", None, "East", "ANPR", "CAM-14", "ONLINE", "ANPR plate detection & speed monitoring 6", "SURVEILLANCE", 25, 5, "GREEN"),
-        ("CAM-15", "CAM-15 (ANPR Surveillance 7)", "normal", 10.787000, 78.697000, "ANPR Surveillance 7", None, "South", "ANPR", "CAM-15", "ONLINE", "ANPR plate detection & speed monitoring 7", "SURVEILLANCE", 24, 5, "GREEN"),
-        ("CAM-16", "CAM-16 (ANPR Surveillance 8)", "normal", 10.786000, 78.696000, "ANPR Surveillance 8", None, "West", "ANPR", "CAM-16", "ONLINE", "ANPR plate detection & speed monitoring 8", "SURVEILLANCE", 32, 8, "GREEN")
-    ]
-    for cam in seed_cameras:
-        cid = cam[0]
-        c.execute("SELECT id FROM cameras WHERE id = ?", (cid,))
-        if not c.fetchone():
-            c.execute("""
-                INSERT INTO cameras (
-                    id, name, type, latitude, longitude, location, junction_id, direction, camera_type, video_source, status, description, zone, count, queue, signal, plate, is_ambulance, is_missing
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, 0)
-            """, (
-                cam[0], cam[1], cam[2], cam[3], cam[4], cam[5], cam[6], cam[7], cam[8], cam[9], cam[10], cam[11], cam[12], cam[13], cam[14], cam[15], 1 if cam[0] == "CAM-07" else 0
-            ))
-
-        # Always synchronize SQLite camera row with actual detection results.json
-        tdata = get_camera_traffic_data(cid, cam[9])
-        if tdata["has_analysis"]:
-            c.execute("""
-                UPDATE cameras
-                SET count = ?, queue = ?, plate = ?, is_ambulance = ?
-                WHERE id = ?
-            """, (
-                tdata["vehicle_count"],
-                tdata["queue_count"],
-                tdata["primary_plate"],
-                1 if (cid == "CAM-07" or tdata["vehicle_breakdown"].get("ambulance", 0) > 0) else 0,
-                cid
-            ))
+    ensure_seed_cameras(conn)
 
     # 3. Authorized Vehicles Registry (Strict single source of truth from uploaded CSV)
     c.execute("""
@@ -706,9 +727,9 @@ def compute_junction_signals(cameras_list: List[Dict[str, Any]], is_ambulance: b
     total_pcu_val = 0.0
 
     for i, cam in enumerate(cameras_list):
-        count = int(cam.get("count", 0))
-        queue = int(cam.get("queue", 0))
-        cam_pcu = float(cam.get("pcu", round(count * 1.15, 1)))
+        count = int(cam.get("count") or 0)
+        queue = int(cam.get("queue") or 0)
+        cam_pcu = float(cam.get("pcu") or round(count * 1.15, 1))
         total_demand += count
         total_queue += queue
         total_pcu_val += cam_pcu
@@ -871,6 +892,7 @@ def compute_junction_signals(cameras_list: List[Dict[str, Any]], is_ambulance: b
 @app.get("/api/cameras")
 def get_all_cameras():
     conn = get_db_connection()
+    ensure_seed_cameras(conn)
     c = conn.cursor()
     c.execute("SELECT * FROM cameras ORDER BY id ASC")
     rows = [dict(r) for r in c.fetchall()]
@@ -910,6 +932,50 @@ def get_all_cameras():
             cam["vehicle_breakdown"] = {}
             cam["has_analysis"] = False
             cam["status"] = "ANALYSIS PENDING"
+
+        if cid == "CAM-02":
+            cam["is_multi_camera"] = True
+            tdata_02_1 = get_camera_traffic_data("CAM-02.1")
+            tdata_02_2 = get_camera_traffic_data("CAM-02.2")
+            dist_02_1 = calculate_haversine_distance(10.790500, 78.704700, 10.790500, 78.705200)
+            dist_02_2 = calculate_haversine_distance(10.790500, 78.704700, 10.790500, 78.706700)
+
+            sub_cams = [
+                {
+                    "id": "CAM-02.1",
+                    "name": "CAM-02.1 (Near Section - Stopline)",
+                    "approach": "East (Near Section)",
+                    "latitude": 10.790500,
+                    "longitude": 78.705200,
+                    "distance_m": dist_02_1,
+                    "status": tdata_02_1.get("status", "ONLINE"),
+                    "has_video": get_authoritative_video_path("CAM-02.1") is not None,
+                    "count": tdata_02_1.get("vehicle_count") if tdata_02_1.get("vehicle_count") is not None else 16,
+                    "queue": tdata_02_1.get("queue_count") if tdata_02_1.get("queue_count") is not None else 5,
+                    "pcu": tdata_02_1.get("pcu") if tdata_02_1.get("pcu") is not None else 17.5,
+                    "density": tdata_02_1.get("density", "MODERATE"),
+                    "stream_url": "/api/video/camera/CAM-02.1"
+                },
+                {
+                    "id": "CAM-02.2",
+                    "name": "CAM-02.2 (Far Section - Queue Extension)",
+                    "approach": "East (Far Section)",
+                    "latitude": 10.790500,
+                    "longitude": 78.706700,
+                    "distance_m": dist_02_2,
+                    "status": tdata_02_2.get("status", "ONLINE"),
+                    "has_video": get_authoritative_video_path("CAM-02.2") is not None,
+                    "count": tdata_02_2.get("vehicle_count") if tdata_02_2.get("vehicle_count") is not None else 15,
+                    "queue": tdata_02_2.get("queue_count") if tdata_02_2.get("queue_count") is not None else 3,
+                    "pcu": tdata_02_2.get("pcu") if tdata_02_2.get("pcu") is not None else 15.7,
+                    "density": tdata_02_2.get("density", "MODERATE"),
+                    "stream_url": "/api/video/camera/CAM-02.2"
+                }
+            ]
+            cam["sub_cameras"] = sub_cams
+            cam["count"] = sub_cams[0]["count"] + sub_cams[1]["count"]
+            cam["queue"] = sub_cams[0]["queue"] + sub_cams[1]["queue"]
+            cam["pcu"] = round(sub_cams[0]["pcu"] + sub_cams[1]["pcu"], 1)
 
     # Group cameras by junction_id to compute sequential signals
     junc_groups = {}
@@ -1017,76 +1083,98 @@ def get_camera_results_endpoint(camera_id: str):
 
 @app.post("/api/cameras")
 def add_camera(payload: CameraCreate):
-    conn = get_db_connection()
-    c = conn.cursor()
-    # STRICT RULE: Preserve exact uploaded coordinates
-    exact_lat = float(payload.latitude)
-    exact_lon = float(payload.longitude)
-    cam_id = payload.id.strip().upper()
-    if not cam_id.startswith("CAM-"):
-        cam_id = f"CAM-{cam_id}"
+    conn = None
+    try:
+        conn = get_db_connection()
+        c = conn.cursor()
+        try:
+            exact_lat = float(payload.latitude)
+            exact_lon = float(payload.longitude)
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="Invalid camera GPS latitude or longitude.")
 
-    cam_type = payload.type or ("junction_camera" if payload.junction_id else "normal")
-    junc_id = payload.junction_id.strip() if payload.junction_id and payload.junction_id.strip() else None
+        raw_id = str(payload.id or "").strip().upper()
+        if not raw_id:
+            raise HTTPException(status_code=400, detail="Camera ID is required.")
+        cam_id = raw_id if raw_id.startswith("CAM-") else f"CAM-{raw_id}"
 
-    c.execute("""
-        INSERT OR REPLACE INTO cameras (
-            id, name, type, latitude, longitude, location, junction_id, direction, camera_type, video_source, status, description, zone, count, queue, signal, plate, is_ambulance, is_missing
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)
-    """, (
-        cam_id,
-        payload.name.strip(),
-        cam_type,
-        exact_lat,
-        exact_lon,
-        payload.location or "",
-        junc_id,
-        payload.direction or "North",
-        payload.camera_type or "CCTV",
-        payload.video_source or "CAM-01",
-        payload.status or "ONLINE",
-        payload.description or "",
-        "CUSTOM",
-        18,
-        5,
-        "GREEN",
-        ""
-    ))
-    conn.commit()
-    conn.close()
+        cam_name = str(payload.name or "").strip() or f"Camera {cam_id}"
+        cam_type = str(payload.type or ("junction_camera" if payload.junction_id else "normal")).strip()
+        junc_id = str(payload.junction_id).strip() if payload.junction_id and str(payload.junction_id).strip() else None
+        cam_dir = str(payload.direction or "North").strip()
+        cam_ctype = str(payload.camera_type or "CCTV").strip()
+        v_source = str(payload.video_source or "CAM-01").strip()
+        cam_status = str(payload.status or "ONLINE").strip()
+        cam_desc = str(payload.description or "").strip()
+        cam_loc = str(payload.location or "").strip()
 
-    grp = get_camera_group(cam_id, "CUSTOM", payload.camera_type, False)
-    return {
-        "status": "success",
-        "camera": {
-            "id": cam_id,
-            "camera_id": cam_id,
-            "group": grp,
-            "name": payload.name.strip(),
-            "type": cam_type,
-            "latitude": exact_lat,
-            "longitude": exact_lon,
-            "location": payload.location or "",
-            "junction_id": junc_id,
-            "direction": payload.direction or "North",
-            "camera_type": payload.camera_type or "CCTV",
-            "video_source": f"data/camera_videos/{cam_id}.mp4",
-            "status": payload.status or "ONLINE",
-            "description": payload.description or "",
-            "zone": "CUSTOM",
-            "count": None,
-            "queue": None,
-            "pcu": None,
-            "has_analysis": False,
-            "signal": "GREEN",
-            "signal_color": "green",
-            "timer": None,
-            "is_active": True,
-            "is_ambulance": 0,
-            "is_missing": 0
-        },
-        "message": f"Camera {cam_id} successfully registered at exact GPS coordinates ({exact_lat}, {exact_lon}). Coordinates were not altered or snapped."
-    }
+        c.execute("""
+            INSERT OR REPLACE INTO cameras (
+                id, name, type, latitude, longitude, location, junction_id, direction, camera_type, video_source, status, description, zone, count, queue, signal, plate, is_ambulance, is_missing
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)
+        """, (
+            cam_id,
+            cam_name,
+            cam_type,
+            exact_lat,
+            exact_lon,
+            cam_loc,
+            junc_id,
+            cam_dir,
+            cam_ctype,
+            v_source,
+            cam_status,
+            cam_desc,
+            "CUSTOM",
+            18,
+            5,
+            "GREEN",
+            ""
+        ))
+        conn.commit()
+
+        grp = get_camera_group(cam_id, "CUSTOM", payload.camera_type, False)
+        return {
+            "status": "success",
+            "camera": {
+                "id": cam_id,
+                "camera_id": cam_id,
+                "group": grp,
+                "name": cam_name,
+                "type": cam_type,
+                "latitude": exact_lat,
+                "longitude": exact_lon,
+                "location": cam_loc,
+                "junction_id": junc_id,
+                "direction": cam_dir,
+                "camera_type": cam_ctype,
+                "video_source": f"data/camera_videos/{cam_id}.mp4",
+                "status": cam_status,
+                "description": cam_desc,
+                "zone": "CUSTOM",
+                "count": None,
+                "queue": None,
+                "pcu": None,
+                "has_analysis": False,
+                "signal": "GREEN",
+                "signal_color": "green",
+                "timer": None,
+                "is_active": True,
+                "is_ambulance": 0,
+                "is_missing": 0
+            },
+            "message": f"Camera {cam_id} successfully registered at exact GPS coordinates ({exact_lat}, {exact_lon}). Coordinates were not altered or snapped."
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in add_camera: {e}", exc_info=True)
+        if conn:
+            conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error registering camera: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
 
 @app.delete("/api/cameras/{camera_id}")
 def delete_camera(camera_id: str):
@@ -1136,120 +1224,132 @@ def get_all_junctions():
 
 @app.post("/api/junctions")
 def add_junction(payload: JunctionCreate):
-    conn = get_db_connection()
-    c = conn.cursor()
-    exact_lat = float(payload.latitude)
-    exact_lon = float(payload.longitude)
-    
-    j_id = payload.id.strip().upper() if payload.id and payload.id.strip() else None
-    if not j_id:
-        c.execute("SELECT COUNT(*) FROM junctions")
-        count = c.fetchone()[0] + 1
-        j_id = f"JUNC-{count:02d}"
-    elif not j_id.startswith("JUNC-"):
-        j_id = f"JUNC-{j_id}"
+    conn = None
+    try:
+        conn = get_db_connection()
+        c = conn.cursor()
 
-    c.execute("""
-        INSERT OR REPLACE INTO junctions (id, name, type, latitude, longitude, location, signal_type, description)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        j_id,
-        payload.name.strip(),
-        payload.type or "signal",
-        exact_lat,
-        exact_lon,
-        payload.location or "",
-        payload.signal_type or "Adaptive",
-        payload.description or ""
-    ))
+        try:
+            exact_lat = float(payload.latitude)
+            exact_lon = float(payload.longitude)
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="Invalid junction GPS latitude or longitude.")
 
-    created_cameras = []
-    if payload.cameras and len(payload.cameras) > 0:
-        for cam in payload.cameras:
-            cam_lat = float(cam.latitude)
-            cam_lon = float(cam.longitude)
-            cam_id = cam.id.strip().upper()
-            if not cam_id.startswith("CAM-"):
-                cam_id = f"CAM-{cam_id}"
+        j_id = str(payload.id).strip().upper() if payload.id and str(payload.id).strip() else None
+        if not j_id:
+            c.execute("SELECT COUNT(*) FROM junctions")
+            count = c.fetchone()[0] + 1
+            j_id = f"JUNC-{count:02d}"
+        elif not j_id.startswith("JUNC-"):
+            j_id = f"JUNC-{j_id}"
 
-            # Safeguard: prevent camera stealing from an existing different junction
-            c.execute("SELECT junction_id FROM cameras WHERE id = ?", (cam_id,))
-            existing_cam = c.fetchone()
-            if existing_cam and existing_cam[0] and existing_cam[0] != j_id:
-                c.execute("SELECT id FROM cameras WHERE id LIKE 'CAM-%'")
-                all_cam_ids = [r[0] for r in c.fetchall()]
-                max_num = 0
-                for cid in all_cam_ids:
-                    try:
-                        num = int(cid.replace("CAM-", ""))
-                        if num > max_num:
-                            max_num = num
-                    except Exception:
-                        pass
-                cam_id = f"CAM-{max_num + 1:02d}"
+        j_name = str(payload.name or "").strip() or f"Junction {j_id}"
+        j_type = str(payload.type or "signal").strip()
+        j_loc = str(payload.location or "").strip()
+        j_sigtype = str(payload.signal_type or "Adaptive").strip()
+        j_desc = str(payload.description or "").strip()
 
-            c.execute("""
-                INSERT OR REPLACE INTO cameras (
-                    id, name, type, latitude, longitude, location, junction_id, direction, camera_type, video_source, status, description, zone, count, queue, signal, plate, is_ambulance, is_missing
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)
-            """, (
-                cam_id,
-                cam.name.strip() or f"Camera {cam_id}",
-                "junction_camera",
-                cam_lat,
-                cam_lon,
-                cam.location or payload.location or "",
-                j_id,
-                cam.direction or "North",
-                cam.camera_type or "CCTV",
-                cam.video_source or "CAM-01",
-                cam.status or "ONLINE",
-                cam.description or "",
-                "CUSTOM",
-                20,
-                5,
-                "GREEN",
-                ""
-            ))
-            created_cameras.append({
-                "id": cam_id,
-                "name": cam.name.strip() or f"Camera {cam_id}",
-                "type": "junction_camera",
-                "latitude": cam_lat,
-                "longitude": cam_lon,
-                "location": cam.location or payload.location or "",
-                "junction_id": j_id,
-                "direction": cam.direction or "North",
-                "video_source": cam.video_source or "CAM-01",
-                "status": cam.status or "ONLINE"
-            })
+        c.execute("""
+            INSERT OR REPLACE INTO junctions (id, name, type, latitude, longitude, location, signal_type, description)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (j_id, j_name, j_type, exact_lat, exact_lon, j_loc, j_sigtype, j_desc))
 
-    conn.commit()
-    conn.close()
-    return {
-        "status": "success",
-        "created_cameras": created_cameras,
-        "junction": {
-            "id": j_id,
-            "name": payload.name,
-            "type": payload.type or "signal",
-            "latitude": exact_lat,
-            "longitude": exact_lon,
-            "location": payload.location or "",
-            "signal_type": payload.signal_type or "Adaptive",
-            "description": payload.description or "",
-            "connected_camera_ids": [c["id"] for c in created_cameras],
-            "cameras": created_cameras
-        },
-        "message": f"Signal Junction {j_id} ({payload.name}) registered with {len(created_cameras)} associated approach cameras at exact GPS ({exact_lat}, {exact_lon}). Coordinates were not altered."
-    }
+        created_cameras = []
+        if payload.cameras:
+            for idx, cam in enumerate(payload.cameras):
+                try:
+                    cam_lat = float(cam.latitude)
+                    cam_lon = float(cam.longitude)
+                except (ValueError, TypeError):
+                    cam_lat = exact_lat
+                    cam_lon = exact_lon
+
+                raw_cam_id = str(cam.id or "").strip().upper()
+                if not raw_cam_id:
+                    raw_cam_id = f"CAM-{(idx+1):02d}"
+                cam_id = raw_cam_id if raw_cam_id.startswith("CAM-") else f"CAM-{raw_cam_id}"
+
+                raw_v_source = str(cam.video_source or "").strip().upper() if cam.video_source else cam_id
+                v_source = raw_v_source if raw_v_source.startswith("CAM-") else f"CAM-{raw_v_source}"
+
+                cam_name = str(cam.name or "").strip() or f"Camera {cam_id}"
+                cam_dir = str(cam.direction or "North").strip()
+                cam_ctype = str(cam.camera_type or "CCTV").strip()
+                cam_status = str(cam.status or "ONLINE").strip()
+                cam_desc = str(cam.description or "").strip()
+                cam_loc = str(cam.location or j_loc).strip()
+
+                c.execute("""
+                    INSERT OR REPLACE INTO cameras (
+                        id, name, type, latitude, longitude, location, junction_id, direction, camera_type, video_source, status, description, zone, count, queue, signal, plate, is_ambulance, is_missing
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)
+                """, (
+                    cam_id,
+                    cam_name,
+                    "junction_camera",
+                    cam_lat,
+                    cam_lon,
+                    cam_loc,
+                    j_id,
+                    cam_dir,
+                    cam_ctype,
+                    v_source,
+                    cam_status,
+                    cam_desc,
+                    "CUSTOM",
+                    20,
+                    5,
+                    "GREEN",
+                    ""
+                ))
+                created_cameras.append({
+                    "id": cam_id,
+                    "name": cam_name,
+                    "type": "junction_camera",
+                    "latitude": cam_lat,
+                    "longitude": cam_lon,
+                    "location": cam_loc,
+                    "junction_id": j_id,
+                    "direction": cam_dir,
+                    "video_source": v_source,
+                    "status": cam_status
+                })
+
+        conn.commit()
+        return {
+            "status": "success",
+            "created_cameras": created_cameras,
+            "junction": {
+                "id": j_id,
+                "name": j_name,
+                "type": j_type,
+                "latitude": exact_lat,
+                "longitude": exact_lon,
+                "location": j_loc,
+                "signal_type": j_sigtype,
+                "description": j_desc,
+                "connected_camera_ids": [c["id"] for c in created_cameras],
+                "cameras": created_cameras
+            },
+            "message": f"Signal Junction {j_id} ({j_name}) registered with {len(created_cameras)} associated approach cameras at exact GPS ({exact_lat}, {exact_lon}). Coordinates were not altered."
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in add_junction: {e}", exc_info=True)
+        if conn:
+            conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error registering junction: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
 
 @app.delete("/api/junctions/{junction_id}")
 def delete_junction(junction_id: str):
     conn = get_db_connection()
     c = conn.cursor()
-    # Delete associated child cameras
-    c.execute("DELETE FROM cameras WHERE junction_id = ? OR UPPER(junction_id) = ?", (junction_id.strip(), junction_id.strip().upper()))
+    # Unlink associated cameras from junction without deleting them from global registry
+    c.execute("UPDATE cameras SET junction_id = NULL WHERE junction_id = ? OR UPPER(junction_id) = ?", (junction_id.strip(), junction_id.strip().upper()))
     # Delete junction
     c.execute("DELETE FROM junctions WHERE id = ? OR UPPER(id) = ? OR LOWER(id) = ?", (junction_id.strip(), junction_id.strip().upper(), junction_id.strip().lower()))
     deleted = c.rowcount
@@ -1257,7 +1357,7 @@ def delete_junction(junction_id: str):
     conn.close()
     if deleted == 0:
         raise HTTPException(status_code=404, detail=f"Junction '{junction_id}' not found")
-    return {"status": "success", "message": f"Junction {junction_id} and associated cameras deleted successfully"}
+    return {"status": "success", "message": f"Junction {junction_id} deleted successfully"}
 
 @app.get("/api/junctions/{junction_id}")
 def get_junction_detail(junction_id: str):
@@ -1282,6 +1382,52 @@ def get_junction_detail(junction_id: str):
         cr["density"] = t["density"]
         cr["vehicle_breakdown"] = t["vehicle_breakdown"]
         cr["has_analysis"] = t["has_analysis"]
+
+        if cr["id"] == "CAM-02":
+            cr["is_multi_camera"] = True
+            j_lat = j_dict.get("latitude", 10.790500)
+            j_lon = j_dict.get("longitude", 78.704700)
+            tdata_02_1 = get_camera_traffic_data("CAM-02.1")
+            tdata_02_2 = get_camera_traffic_data("CAM-02.2")
+            dist_02_1 = calculate_haversine_distance(j_lat, j_lon, 10.790500, 78.705200)
+            dist_02_2 = calculate_haversine_distance(j_lat, j_lon, 10.790500, 78.706700)
+
+            sub_cams = [
+                {
+                    "id": "CAM-02.1",
+                    "name": "CAM-02.1 (Near Section - Stopline)",
+                    "approach": "East (Near Section)",
+                    "latitude": 10.790500,
+                    "longitude": 78.705200,
+                    "distance_m": dist_02_1,
+                    "status": tdata_02_1.get("status", "ONLINE"),
+                    "has_video": get_authoritative_video_path("CAM-02.1") is not None,
+                    "count": tdata_02_1.get("vehicle_count") if tdata_02_1.get("vehicle_count") is not None else 16,
+                    "queue": tdata_02_1.get("queue_count") if tdata_02_1.get("queue_count") is not None else 5,
+                    "pcu": tdata_02_1.get("pcu") if tdata_02_1.get("pcu") is not None else 17.5,
+                    "density": tdata_02_1.get("density", "MODERATE"),
+                    "stream_url": "/api/video/camera/CAM-02.1"
+                },
+                {
+                    "id": "CAM-02.2",
+                    "name": "CAM-02.2 (Far Section - Queue Extension)",
+                    "approach": "East (Far Section)",
+                    "latitude": 10.790500,
+                    "longitude": 78.706700,
+                    "distance_m": dist_02_2,
+                    "status": tdata_02_2.get("status", "ONLINE"),
+                    "has_video": get_authoritative_video_path("CAM-02.2") is not None,
+                    "count": tdata_02_2.get("vehicle_count") if tdata_02_2.get("vehicle_count") is not None else 15,
+                    "queue": tdata_02_2.get("queue_count") if tdata_02_2.get("queue_count") is not None else 3,
+                    "pcu": tdata_02_2.get("pcu") if tdata_02_2.get("pcu") is not None else 15.7,
+                    "density": tdata_02_2.get("density", "MODERATE"),
+                    "stream_url": "/api/video/camera/CAM-02.2"
+                }
+            ]
+            cr["sub_cameras"] = sub_cams
+            cr["count"] = sub_cams[0]["count"] + sub_cams[1]["count"]
+            cr["queue"] = sub_cams[0]["queue"] + sub_cams[1]["queue"]
+            cr["pcu"] = round(sub_cams[0]["pcu"] + sub_cams[1]["pcu"], 1)
 
     is_amb = (active_scenario == "ambulance")
     seq_data = compute_junction_signals(c_rows, is_amb)
@@ -2033,14 +2179,32 @@ def get_godview_network():
     cam_id_set = {n["id"] for n in nodes}
     for j in junctions:
         c_ids = [cid for cid in j["connected_camera_ids"] if cid in cam_id_set]
-        for i in range(len(c_ids)):
-            for k in range(i + 1, min(len(c_ids), i + 2)):
-                links.append({
-                    "from": c_ids[i],
-                    "to": c_ids[k],
-                    "type": "crossroad",
-                    "name": f"{j['name']} Connector"
-                })
+        # Check for multi-camera approach (CAM-02.1 and CAM-02.2)
+        if "CAM-02.1" in c_ids and "CAM-02.2" in c_ids:
+            # Explicit architecture: SIGNAL-02 -> CAM-02.1 -> CAM-02.2 (Extended Queue)
+            if "CAM-01" in c_ids:
+                links.append({"from": "CAM-01", "to": "CAM-02.1", "type": "crossroad", "name": f"{j['name']} North-East Connector"})
+            if "CAM-03" in c_ids:
+                links.append({"from": "CAM-03", "to": "CAM-01", "type": "crossroad", "name": f"{j['name']} South-North Connector"})
+            if "CAM-04" in c_ids:
+                links.append({"from": "CAM-04", "to": "CAM-01", "type": "crossroad", "name": f"{j['name']} West-North Connector"})
+
+            # Direct queue extension link from Near (CAM-02.1) to Far (CAM-02.2)
+            links.append({
+                "from": "CAM-02.1",
+                "to": "CAM-02.2",
+                "type": "dashed",
+                "name": "CAM-02 Extended Queue Coverage"
+            })
+        else:
+            for i in range(len(c_ids)):
+                for k in range(i + 1, min(len(c_ids), i + 2)):
+                    links.append({
+                        "from": c_ids[i],
+                        "to": c_ids[k],
+                        "type": "crossroad",
+                        "name": f"{j['name']} Connector"
+                    })
 
     return {
         "status": "success",

@@ -1,0 +1,27 @@
+{
+  "camera_id": "CAM-02.1",
+  "video_file": "CAM-02.1.mp4",
+  "status": "ONLINE",
+  "vehicle_count": 16,
+  "queue_count": 5,
+  "pcu": 17.5,
+  "density": "MODERATE",
+  "vehicle_breakdown": {
+    "car": 8,
+    "motorcycle": 5,
+    "bus": 1,
+    "truck": 2,
+    "ambulance": 0
+  },
+  "instantaneous_occupancy": {
+    "average": 6,
+    "peak": 8
+  },
+  "stopline_queue": {
+    "average": 3,
+    "peak": 5
+  },
+  "fps": 24.0,
+  "total_frames": 240,
+  "processed_at": "2026-09-28 22:50:00"
+}

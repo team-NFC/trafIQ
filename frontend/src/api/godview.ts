@@ -211,6 +211,22 @@ export interface AmbulanceStateResponse {
   evidence_image?: string;
 }
 
+export interface SubCameraItem {
+  id: string;
+  name: string;
+  approach?: string;
+  latitude: number;
+  longitude: number;
+  distance_m: number;
+  status: string;
+  has_video: boolean;
+  count: number;
+  queue: number;
+  pcu: number;
+  density?: string;
+  stream_url?: string;
+}
+
 export interface CameraItem {
   id: string;
   camera_id?: string;
@@ -218,6 +234,8 @@ export interface CameraItem {
   name: string;
   type?: 'normal' | 'junction_camera';
   has_analysis?: boolean;
+  is_multi_camera?: boolean;
+  sub_cameras?: SubCameraItem[];
   latitude: number;
   longitude: number;
   location?: string;

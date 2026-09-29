@@ -88,7 +88,14 @@ class ApiClient {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        let detail = response.statusText;
+        try {
+          const errBody = await response.json();
+          if (errBody && typeof errBody === 'object') {
+            detail = errBody.detail || errBody.message || errBody.error || response.statusText;
+          }
+        } catch {}
+        throw new Error(`HTTP ${response.status}: ${detail}`);
       }
 
       const json = await response.json();
@@ -114,7 +121,14 @@ class ApiClient {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        let detail = response.statusText;
+        try {
+          const errBody = await response.json();
+          if (errBody && typeof errBody === 'object') {
+            detail = errBody.detail || errBody.message || errBody.error || response.statusText;
+          }
+        } catch {}
+        throw new Error(`HTTP ${response.status}: ${detail}`);
       }
 
       const json = await response.json();
@@ -139,7 +153,14 @@ class ApiClient {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        let detail = response.statusText;
+        try {
+          const errBody = await response.json();
+          if (errBody && typeof errBody === 'object') {
+            detail = errBody.detail || errBody.message || errBody.error || response.statusText;
+          }
+        } catch {}
+        throw new Error(`HTTP ${response.status}: ${detail}`);
       }
 
       const json = await response.json();

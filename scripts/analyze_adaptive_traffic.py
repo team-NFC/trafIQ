@@ -37,20 +37,7 @@ def calculate_adaptive_timing(
 ) -> Dict[str, Any]:
     """
     Computes adaptive signal green time based on real traffic counts.
-    
-    Principles:
-    1. PCU (Passenger Car Unit) weighting:
-       - Car: 1.0
-       - Motorcycle: 0.5
-       - Bus: 2.5
-       - Truck: 2.0
-       - Ambulance: Emergency Priority Override
-    2. Proportional demand-based green split:
-       Allocates available green time across approaches proportionally to traffic demand,
-       bounded by [min_green, max_green] safety limits.
-    3. Emergency Vehicle Preemption (EVP):
-       If an ambulance is detected on an approach, that approach receives immediate
-       EMERGENCY GREEN priority override.
+    Combines sub-cameras (CAM-02.1 + CAM-02.2) into logical approach CAM-02.
     """
     pcu_weights = {
         "car": 1.0,
@@ -60,38 +47,68 @@ def calculate_adaptive_timing(
         "ambulance": 1.0,
     }
 
-    num_approaches = len(camera_counts)
+    # Group sub-cameras into logical signal approaches (e.g. CAM-02.1 & CAM-02.2 -> CAM-02)
+    approach_groups: Dict[str, List[str]] = {}
+    for cam_id in camera_counts.keys():
+        if cam_id.startswith("camera_02") or cam_id.startswith("CAM-02"):
+            approach_groups.setdefault("CAM-02", []).append(cam_id)
+        elif cam_id.startswith("camera_01") or cam_id.startswith("CAM-01"):
+            approach_groups.setdefault("CAM-01", []).append(cam_id)
+        elif cam_id.startswith("camera_03") or cam_id.startswith("CAM-03"):
+            approach_groups.setdefault("CAM-03", []).append(cam_id)
+        elif cam_id.startswith("camera_04") or cam_id.startswith("CAM-04"):
+            approach_groups.setdefault("CAM-04", []).append(cam_id)
+        else:
+            approach_groups.setdefault(cam_id, []).append(cam_id)
+
+    num_approaches = len(approach_groups)
     lost_time = num_approaches * (yellow_time + all_red_time)
     effective_green_pool = max(min_green * num_approaches, cycle_time - lost_time)
 
-    # Calculate demand (PCU and Raw count) per approach
-    demands: Dict[str, float] = {}
+    # Calculate PCU demand per logical approach
+    group_demands: Dict[str, float] = {}
+    group_vehicles: Dict[str, int] = {}
+    group_names: Dict[str, str] = {}
     ambulance_approaches: List[str] = []
 
-    for cam_id, data in camera_counts.items():
-        counts = data["class_counts"]
-        total_pcu = sum(counts.get(cls_name, 0) * weight for cls_name, weight in pcu_weights.items())
-        demands[cam_id] = total_pcu
-        if counts.get("ambulance", 0) > 0 or data.get("emergency_detected", False):
-            ambulance_approaches.append(cam_id)
+    for group_id, member_ids in approach_groups.items():
+        grp_pcu = 0.0
+        grp_v = 0
+        has_amb = False
+        names = []
+        for cid in member_ids:
+            data = camera_counts[cid]
+            counts = data["class_counts"]
+            pcu = sum(counts.get(cls_name, 0) * weight for cls_name, weight in pcu_weights.items())
+            grp_pcu += pcu
+            grp_v += data["total_unique"]
+            names.append(data["approach"])
+            if counts.get("ambulance", 0) > 0 or data.get("emergency_detected", False):
+                has_amb = True
 
-    total_demand = sum(demands.values())
+        group_demands[group_id] = grp_pcu
+        group_vehicles[group_id] = grp_v
+        group_names[group_id] = " / ".join(set(names))
+        if has_amb:
+            ambulance_approaches.append(group_id)
+
+    total_demand = sum(group_demands.values())
     timing_plan: Dict[str, Dict[str, Any]] = {}
 
-    for cam_id, data in camera_counts.items():
-        demand = demands[cam_id]
+    for group_id in approach_groups.keys():
+        demand = group_demands[group_id]
         if total_demand > 0:
             raw_green = (demand / total_demand) * effective_green_pool
         else:
             raw_green = effective_green_pool / num_approaches
 
-        # Clamp between min_green and max_green
         allocated_green = round(max(min_green, min(max_green, raw_green)), 1)
+        is_emergency = group_id in ambulance_approaches
 
-        is_emergency = cam_id in ambulance_approaches
-        timing_plan[cam_id] = {
-            "name": data["display_name"],
-            "total_vehicles": data["total_unique"],
+        timing_plan[group_id] = {
+            "name": group_id,
+            "approach_name": group_names[group_id],
+            "total_vehicles": group_vehicles[group_id],
             "demand_pcu": round(demand, 1),
             "allocated_green_seconds": allocated_green,
             "emergency_override": is_emergency,
@@ -114,14 +131,29 @@ def process_scenario(
     device: str = "0",
     conf_threshold: float = 0.25,
 ) -> Dict[str, Dict[str, Any]]:
-    """Runs YOLO + ByteTrack + TrafficCounter on all 4 cameras of a scenario."""
+    """Runs YOLO + ByteTrack + TrafficCounter on all cameras (including sub-cameras CAM-02.1 & CAM-02.2)."""
     weights_path = PROJECT_ROOT / "yolov8n.pt"
-    camera_configs = [
+    if not weights_path.is_file():
+        weights_path = PROJECT_ROOT / "weights" / "best.pt"
+
+    raw_configs = [
         ("camera_01", "CAM-01", "North Approach"),
+        ("camera_02.1", "CAM-02.1", "East Approach (Near Section)"),
+        ("camera_02.2", "CAM-02.2", "East Approach (Far Section)"),
         ("camera_02", "CAM-02", "East Approach"),
         ("camera_03", "CAM-03", "South Approach"),
         ("camera_04", "CAM-04", "West Approach"),
     ]
+
+    camera_configs = []
+    seen = set()
+    for fname, disp, appr in raw_configs:
+        vfile = video_dir / f"{fname}.mp4"
+        if vfile.is_file():
+            if fname == "camera_02" and ("camera_02.1" in seen or "camera_02.2" in seen):
+                continue
+            camera_configs.append((fname, disp, appr))
+            seen.add(fname)
 
     scenario_results: Dict[str, Dict[str, Any]] = {}
 
@@ -197,13 +229,17 @@ def print_formatted_report(
     scenario_results: Dict[str, Dict[str, Any]],
     timing_plan: Dict[str, Any],
 ):
-    """Outputs the exact requested format per camera and the adaptive signal timing breakdown."""
+    """Outputs report per camera (including sub-cameras CAM-02.1 & CAM-02.2) and adaptive signal timing."""
     print(f"\n====================================================================")
     print(f"  TRAFFICIQ REPORT: {scenario_name.upper()}")
     print(f"====================================================================")
 
+    sub_cams_02 = [cid for cid in scenario_results.keys() if "camera_02" in cid or "CAM-02" in cid]
+    tot_02_v = sum(scenario_results[cid]["total_unique"] for cid in sub_cams_02) if sub_cams_02 else 0
+
     for cam_id, data in scenario_results.items():
         disp = data["display_name"]
+        approach = data["approach"]
         counts = data["class_counts"]
         cars = counts.get("car", 0)
         motorcycles = counts.get("motorcycle", 0)
@@ -212,13 +248,19 @@ def print_formatted_report(
         ambulances = counts.get("ambulance", 0)
         total = data["total_unique"]
 
-        print(f"\n{disp}")
+        print(f"\n{disp} ({approach})")
         print(f"Cars: {cars}")
         print(f"Motorcycles: {motorcycles}")
         print(f"Buses: {buses}")
         print(f"Trucks: {trucks}")
         print(f"Ambulances: {ambulances}")
         print(f"Total vehicles: {total}")
+
+    if len(sub_cams_02) > 1:
+        cam02_pcu = timing_plan["approaches"].get("CAM-02", {}).get("demand_pcu", 0.0)
+        print(f"\nCAM-02 COMBINED (East Approach - Total)")
+        print(f"Combined Vehicles: {tot_02_v}")
+        print(f"Combined PCU Demand: {cam02_pcu} PCU")
 
     print(f"\n--------------------------------------------------------------------")
     print(f"  ADAPTIVE SIGNAL TIMING CALCULATION ({scenario_name.upper()})")
@@ -227,13 +269,13 @@ def print_formatted_report(
     if timing_plan["ambulance_active"]:
         print(f"🚨 EMERGENCY ALERT: Ambulance detected on approach(es): {', '.join(timing_plan['ambulance_approaches'])}")
 
-    print(f"\n{'Camera':<10} {'Approach':<16} {'Vehicles':<10} {'PCU Demand':<12} {'Green Time':<12} {'Status'}")
-    print(f"{'-'*75}")
-    for cam_id, plan in timing_plan["approaches"].items():
-        approach_name = scenario_results[cam_id]["approach"]
+    print(f"\n{'Camera':<10} {'Approach':<35} {'Vehicles':<10} {'PCU Demand':<12} {'Green Time':<12} {'Status'}")
+    print(f"{'-'*90}")
+    for group_id, plan in timing_plan["approaches"].items():
         status_str = "🚨 EMERGENCY OVERRIDE" if plan["emergency_override"] else "ADAPTIVE GREEN"
+        app_disp = "East Approach (CAM-02.1 + CAM-02.2)" if group_id == "CAM-02" and len(sub_cams_02) > 1 else plan["approach_name"]
         print(
-            f"{plan['name']:<10} {approach_name:<16} {plan['total_vehicles']:<10} "
+            f"{plan['name']:<10} {app_disp:<35} {plan['total_vehicles']:<10} "
             f"{plan['demand_pcu']:<12} {plan['allocated_green_seconds']}s{'':<7} {status_str}"
         )
     print(f"====================================================================\n")

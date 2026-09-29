@@ -189,14 +189,53 @@ export const CameraCard: React.FC<CameraCardProps> = ({
 
       {/* Video Stream Viewport */}
       <div className="relative aspect-video bg-[#04060a] overflow-hidden flex items-center justify-center">
-        {isOffline || streamError ? (
+        {camera.is_multi_camera && camera.sub_cameras && camera.sub_cameras.length > 0 ? (
+          <div className="w-full h-full grid grid-cols-2 gap-1 p-1 bg-black">
+            {camera.sub_cameras.map((subCam) => {
+              const subStreamUrl = `${baseUrl}/api/video/camera/${subCam.id}${retryNonce > 0 ? `?r=${retryNonce}` : ''}`;
+              return (
+                <div key={subCam.id} className="relative w-full h-full bg-[#080d16] rounded overflow-hidden border border-white/10 flex flex-col justify-between">
+                  {subCam.has_video ? (
+                    <img
+                      src={subStreamUrl}
+                      alt={subCam.name}
+                      className="w-full h-full object-cover select-none"
+                      onError={handleStreamError}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center text-neutral-400 p-2 text-center bg-black/60">
+                      <VideoOff className="w-5 h-5 text-neutral-600 mb-1" />
+                      <span className="text-[9px] font-mono font-bold text-neutral-300">VIDEO UNAVAILABLE</span>
+                    </div>
+                  )}
+
+                  {/* Top overlay */}
+                  <div className="absolute top-1 left-1 right-1 flex items-center justify-between pointer-events-none">
+                    <span className="px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-md text-[9px] font-mono font-bold text-white border border-white/15">
+                      {subCam.id}
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded bg-cyan-950/80 backdrop-blur-md text-[9px] font-mono font-semibold text-cyan-300 border border-cyan-500/30">
+                      {subCam.distance_m}m
+                    </span>
+                  </div>
+
+                  {/* Bottom overlay */}
+                  <div className="absolute bottom-1 left-1 right-1 flex items-center justify-between px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-md text-[9px] font-mono text-neutral-300 border border-white/10 pointer-events-none">
+                    <span>Vehicles: <strong className="text-emerald-400 font-bold">{subCam.count}</strong></span>
+                    <span>Q: <strong className="text-amber-400 font-bold">{subCam.queue}</strong></span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : isOffline || streamError ? (
           <div className="flex flex-col items-center justify-center text-neutral-400 p-4 text-center space-y-1">
             <VideoOff className="w-8 h-8 text-neutral-600 mb-1" />
-            <span className="text-xs font-mono font-bold text-neutral-300">
-              {isOffline ? 'CAMERA OFFLINE' : 'RECONNECTING STREAM...'}
+            <span className="text-xs font-mono font-bold text-neutral-300 uppercase tracking-wider">
+              {isOffline ? 'CAMERA OFFLINE' : 'VIDEO UNAVAILABLE'}
             </span>
             <span className="text-[10px] text-neutral-500">
-              {isOffline ? 'Feed temporarily inactive' : 'Retrying backend connection'}
+              {isOffline ? 'Feed temporarily inactive' : 'Video source file missing or offline'}
             </span>
           </div>
         ) : (

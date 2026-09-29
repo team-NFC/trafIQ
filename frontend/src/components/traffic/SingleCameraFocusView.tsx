@@ -175,14 +175,61 @@ export const SingleCameraFocusView: React.FC<SingleCameraFocusViewProps> = ({
         {/* Left 2 Cols: Primary Large Video */}
         <div className="lg:col-span-2 space-y-4">
           <div className="relative aspect-video rounded-xl bg-[#04060a] border border-white/[0.1] overflow-hidden shadow-2xl flex items-center justify-center group">
-            {isOffline || streamError ? (
+            {camera.is_multi_camera && camera.sub_cameras && camera.sub_cameras.length > 0 ? (
+              <div className="w-full h-full grid grid-cols-2 gap-2 p-2 bg-black">
+                {camera.sub_cameras.map((subCam) => {
+                  const subStreamUrl = `${baseUrl}/api/video/camera/${subCam.id}${retryNonce > 0 ? `?r=${retryNonce}` : ''}`;
+                  return (
+                    <div key={subCam.id} className="relative w-full h-full bg-[#080d16] rounded-lg overflow-hidden border border-white/10 flex flex-col justify-between">
+                      {subCam.has_video ? (
+                        <img
+                          src={subStreamUrl}
+                          alt={subCam.name}
+                          className="w-full h-full object-cover select-none"
+                          onError={() => {
+                            setStreamError(true);
+                            setTimeout(() => {
+                              setRetryNonce((prev) => prev + 1);
+                              setStreamError(false);
+                            }, 3000);
+                          }}
+                        />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center text-neutral-400 p-4 text-center bg-black/60 space-y-1">
+                          <Video className="w-6 h-6 text-neutral-600 mb-1" />
+                          <span className="text-xs font-mono font-bold text-neutral-300 uppercase">VIDEO UNAVAILABLE</span>
+                          <span className="text-[10px] text-neutral-500">Video source file missing for {subCam.id}</span>
+                        </div>
+                      )}
+
+                      {/* Top Overlay */}
+                      <div className="absolute top-2 left-2 right-2 flex items-center justify-between pointer-events-none">
+                        <span className="px-2 py-0.5 rounded bg-black/80 backdrop-blur-md text-xs font-mono font-bold text-white border border-white/15">
+                          {subCam.id} • {subCam.approach || 'East Approach'}
+                        </span>
+                        <span className="px-2 py-0.5 rounded bg-cyan-950/80 backdrop-blur-md text-xs font-mono font-semibold text-cyan-300 border border-cyan-500/30">
+                          {subCam.distance_m}m from SIGNAL-02
+                        </span>
+                      </div>
+
+                      {/* Bottom Overlay */}
+                      <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between px-2.5 py-1 rounded bg-black/85 backdrop-blur-md text-xs font-mono text-neutral-300 border border-white/10 pointer-events-none">
+                        <span>Vehicles: <strong className="text-emerald-400 font-bold">{subCam.count}</strong></span>
+                        <span>Q: <strong className="text-amber-400 font-bold">{subCam.queue}</strong></span>
+                        <span>PCU: <strong className="text-cyan-400 font-bold">{subCam.pcu}</strong></span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : isOffline || streamError ? (
               <div className="flex flex-col items-center justify-center text-neutral-400 p-8 text-center space-y-2">
                 <Video className="w-12 h-12 text-neutral-600 mb-1" />
                 <span className="text-sm font-mono font-bold text-neutral-300">
-                  {isOffline ? 'CAMERA STREAM OFFLINE' : 'RECONNECTING STREAM...'}
+                  {isOffline ? 'CAMERA STREAM OFFLINE' : 'VIDEO UNAVAILABLE'}
                 </span>
                 <span className="text-xs text-neutral-500">
-                  {isOffline ? 'Camera is currently unmonitored or offline' : 'Retrying connection to OpenCV hub'}
+                  {isOffline ? 'Camera is currently unmonitored or offline' : 'Video source file missing or offline'}
                 </span>
               </div>
             ) : (
@@ -222,34 +269,60 @@ export const SingleCameraFocusView: React.FC<SingleCameraFocusViewProps> = ({
           </div>
 
           {/* Quick Stats Strip */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="p-3 rounded-xl bg-black/30 border border-white/[0.06]">
-              <span className="text-[10px] font-mono text-neutral-400 uppercase block">Total Vehicles</span>
-              <span className="font-mono font-bold text-lg text-white">
-                {totalVehicles !== null && totalVehicles !== undefined ? totalVehicles : 'ANALYSIS PENDING'}
-              </span>
+          {camera.is_multi_camera && camera.sub_cameras && camera.sub_cameras.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {camera.sub_cameras.map((sc) => (
+                <div key={sc.id} className="p-3 rounded-xl bg-black/40 border border-cyan-500/30">
+                  <div className="flex items-center justify-between text-[10px] font-mono text-cyan-300 uppercase font-bold">
+                    <span>{sc.id} ({sc.approach})</span>
+                    <span>{sc.distance_m}m</span>
+                  </div>
+                  <div className="mt-1 flex items-baseline justify-between">
+                    <span className="font-mono font-bold text-xl text-white">{sc.count} <span className="text-xs font-normal text-neutral-400">vehicles</span></span>
+                    <span className="font-mono text-xs text-neutral-300">Q: {sc.queue} | PCU: {sc.pcu}</span>
+                  </div>
+                </div>
+              ))}
+              <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/40">
+                <div className="text-[10px] font-mono text-emerald-400 uppercase font-bold">
+                  CAM-02 TOTAL COMBINED
+                </div>
+                <div className="mt-1 flex items-baseline justify-between">
+                  <span className="font-mono font-bold text-xl text-emerald-300">{totalVehicles} <span className="text-xs font-normal text-emerald-400/70">vehicles</span></span>
+                  <span className="font-mono text-xs text-emerald-300">Q: {queueCount} | PCU: {pcuDemand}</span>
+                </div>
+              </div>
             </div>
-            <div className="p-3 rounded-xl bg-black/30 border border-white/[0.06]">
-              <span className="text-[10px] font-mono text-neutral-400 uppercase block">Stopline Queue</span>
-              <span className="font-mono font-bold text-lg text-neutral-200">
-                {queueCount !== null && queueCount !== undefined ? queueCount : 'ANALYSIS PENDING'}
-              </span>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-3 rounded-xl bg-black/30 border border-white/[0.06]">
+                <span className="text-[10px] font-mono text-neutral-400 uppercase block">Total Vehicles</span>
+                <span className="font-mono font-bold text-lg text-white">
+                  {totalVehicles !== null && totalVehicles !== undefined ? totalVehicles : 'ANALYSIS PENDING'}
+                </span>
+              </div>
+              <div className="p-3 rounded-xl bg-black/30 border border-white/[0.06]">
+                <span className="text-[10px] font-mono text-neutral-400 uppercase block">Stopline Queue</span>
+                <span className="font-mono font-bold text-lg text-neutral-200">
+                  {queueCount !== null && queueCount !== undefined ? queueCount : 'ANALYSIS PENDING'}
+                </span>
+              </div>
+              <div className="p-3 rounded-xl bg-black/30 border border-white/[0.06]">
+                <span className="text-[10px] font-mono text-neutral-400 uppercase block">Calculated PCU</span>
+                <span className="font-mono font-bold text-lg text-neutral-200">
+                  {totalVehicles === null || totalVehicles === undefined ? 'ANALYSIS PENDING' : pcuDemand}
+                </span>
+              </div>
+              <div className="p-3 rounded-xl bg-black/30 border border-white/[0.06]">
+                <span className="text-[10px] font-mono text-neutral-400 uppercase block">Signal Phase</span>
+                <span className={`font-mono font-bold text-sm ${
+                  camera.signal === 'GREEN' ? 'text-emerald-400' : camera.signal === 'RED' ? 'text-rose-400' : 'text-amber-400'
+                }`}>
+                  ● {camera.signal || 'ADAPTIVE'}
+                </span>
+              </div>
             </div>
-            <div className="p-3 rounded-xl bg-black/30 border border-white/[0.06]">
-              <span className="text-[10px] font-mono text-neutral-400 uppercase block">Calculated PCU</span>
-              <span className="font-mono font-bold text-lg text-neutral-200">
-                {totalVehicles === null || totalVehicles === undefined ? 'ANALYSIS PENDING' : pcuDemand}
-              </span>
-            </div>
-            <div className="p-3 rounded-xl bg-black/30 border border-white/[0.06]">
-              <span className="text-[10px] font-mono text-neutral-400 uppercase block">Signal Phase</span>
-              <span className={`font-mono font-bold text-sm ${
-                camera.signal === 'GREEN' ? 'text-emerald-400' : camera.signal === 'RED' ? 'text-rose-400' : 'text-amber-400'
-              }`}>
-                ● {camera.signal || 'ADAPTIVE'}
-              </span>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Right 1 Col: Comprehensive Camera Metadata & ANPR */}

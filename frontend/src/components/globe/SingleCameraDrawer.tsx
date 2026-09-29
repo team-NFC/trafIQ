@@ -272,49 +272,85 @@ export const SingleCameraDrawer: React.FC<SingleCameraDrawerProps> = ({
           <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
             <span className="flex items-center gap-1.5 text-cyan-400">
               <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-              CCTV FOOTAGE ({camera.id}.mp4)
+              {camera.is_multi_camera ? 'MULTI-CAMERA CCTV FEEDS (CAM-02.1 + CAM-02.2)' : `CCTV FOOTAGE (${camera.id}.mp4)`}
             </span>
             <span>{cameraResults?.fps || 24} FPS • 1080P</span>
           </div>
 
-          <div className="relative rounded-xl overflow-hidden bg-black aspect-video border border-slate-800 shadow-inner flex items-center justify-center">
-            {!streamFailed ? (
-              <img
-                src={streamUrl}
-                alt={`${camera.id} stream`}
-                onError={() => setStreamFailed(true)}
-                className="w-full h-full object-cover"
-                loading="eager"
-              />
-            ) : !snapshotFailed ? (
-              <img
-                src={`${frameUrl}?t=${snapshotNonce}`}
-                alt={`${camera.id} snapshot`}
-                onError={() => setSnapshotFailed(true)}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="text-center p-6 space-y-2">
-                <VideoOff className="w-10 h-10 text-slate-600 mx-auto" />
-                <div className="font-mono text-xs uppercase tracking-wider text-slate-400">
-                  VIDEO SOURCE NOT AVAILABLE
-                </div>
-                <div className="text-[10px] text-slate-500">
-                  No video feed found for {camera.id}
-                </div>
-              </div>
-            )}
-
-            {/* Overlaid Telemetry Stamp */}
-            <div className="absolute top-2 left-2 pointer-events-none bg-black/70 px-2 py-0.5 rounded font-mono text-[9px] text-cyan-300 border border-white/10">
-              {camera.id} • {camera.direction?.toUpperCase() || 'APPROACH'}
+          {camera.is_multi_camera && camera.sub_cameras && camera.sub_cameras.length > 0 ? (
+            <div className="grid grid-cols-2 gap-1.5 aspect-video bg-black p-1 rounded-xl border border-slate-800">
+              {camera.sub_cameras.map((subCam) => {
+                const subStreamUrl = `${baseUrl}/api/video/camera/${subCam.id}`;
+                return (
+                  <div key={subCam.id} className="relative w-full h-full bg-slate-950 rounded-lg overflow-hidden border border-white/10 flex flex-col justify-between">
+                    {subCam.has_video ? (
+                      <img
+                        src={subStreamUrl}
+                        alt={subCam.name}
+                        className="w-full h-full object-cover select-none"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center text-slate-500 p-2 text-center bg-black/60">
+                        <VideoOff className="w-5 h-5 text-slate-600 mb-1" />
+                        <span className="text-[9px] font-mono font-bold text-slate-300 uppercase">VIDEO UNAVAILABLE</span>
+                      </div>
+                    )}
+                    <div className="absolute top-1 left-1 right-1 flex items-center justify-between pointer-events-none">
+                      <span className="px-1.5 py-0.5 rounded bg-black/80 text-[9px] font-mono font-bold text-white border border-white/15">
+                        {subCam.id}
+                      </span>
+                      <span className="px-1.5 py-0.5 rounded bg-cyan-950/80 text-[9px] font-mono font-semibold text-cyan-300 border border-cyan-500/30">
+                        {subCam.distance_m}m
+                      </span>
+                    </div>
+                    <div className="absolute bottom-1 left-1 right-1 flex items-center justify-between px-1.5 py-0.5 rounded bg-black/80 text-[9px] font-mono text-slate-300 border border-white/10 pointer-events-none">
+                      <span>V: <strong className="text-emerald-400 font-bold">{subCam.count}</strong></span>
+                      <span>Q: <strong className="text-amber-400 font-bold">{subCam.queue}</strong></span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-            {ambulances > 0 && (
-              <div className="absolute top-2 right-2 pointer-events-none bg-rose-600/90 text-white px-2 py-0.5 rounded font-mono text-[9px] font-bold animate-pulse">
-                🚨 AMBULANCE DETECTED
+          ) : (
+            <div className="relative rounded-xl overflow-hidden bg-black aspect-video border border-slate-800 shadow-inner flex items-center justify-center">
+              {!streamFailed ? (
+                <img
+                  src={streamUrl}
+                  alt={`${camera.id} stream`}
+                  onError={() => setStreamFailed(true)}
+                  className="w-full h-full object-cover"
+                  loading="eager"
+                />
+              ) : !snapshotFailed ? (
+                <img
+                  src={`${frameUrl}?t=${snapshotNonce}`}
+                  alt={`${camera.id} snapshot`}
+                  onError={() => setSnapshotFailed(true)}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="text-center p-6 space-y-2">
+                  <VideoOff className="w-10 h-10 text-slate-600 mx-auto" />
+                  <div className="font-mono text-xs uppercase tracking-wider text-slate-400">
+                    VIDEO UNAVAILABLE
+                  </div>
+                  <div className="text-[10px] text-slate-500">
+                    No video feed found for {camera.id}
+                  </div>
+                </div>
+              )}
+
+              {/* Overlaid Telemetry Stamp */}
+              <div className="absolute top-2 left-2 pointer-events-none bg-black/70 px-2 py-0.5 rounded font-mono text-[9px] text-cyan-300 border border-white/10">
+                {camera.id} • {camera.direction?.toUpperCase() || 'APPROACH'}
               </div>
-            )}
-          </div>
+              {ambulances > 0 && (
+                <div className="absolute top-2 right-2 pointer-events-none bg-rose-600/90 text-white px-2 py-0.5 rounded font-mono text-[9px] font-bold animate-pulse">
+                  🚨 AMBULANCE DETECTED
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Real-Time Traffic & Vehicle Metrics - Strictly Per-Camera */}

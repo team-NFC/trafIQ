@@ -21,26 +21,18 @@ interface AddJunctionModalProps {
   onPickOnMap: (targetIndex?: number | 'junction') => void;
 }
 
-const FOOTAGE_OPTIONS = [
-  // Normal situation cam 1,2,3,4
+const NORMAL_FOOTAGE_OPTIONS = [
   { id: 'CAM-01', label: 'CAM-01 • Normal Situation Camera 1', group: 'Normal Traffic (CAM 01–04)' },
   { id: 'CAM-02', label: 'CAM-02 • Normal Situation Camera 2', group: 'Normal Traffic (CAM 01–04)' },
   { id: 'CAM-03', label: 'CAM-03 • Normal Situation Camera 3', group: 'Normal Traffic (CAM 01–04)' },
   { id: 'CAM-04', label: 'CAM-04 • Normal Situation Camera 4', group: 'Normal Traffic (CAM 01–04)' },
-  // Ambulance situation cam 1,2,3,4
+];
+
+const EMERGENCY_FOOTAGE_OPTIONS = [
   { id: 'CAM-05', label: 'CAM-05 • Ambulance Situation Camera 1', group: 'Ambulance & EVP (CAM 05–08)' },
   { id: 'CAM-06', label: 'CAM-06 • Ambulance Situation Camera 2', group: 'Ambulance & EVP (CAM 05–08)' },
   { id: 'CAM-07', label: 'CAM-07 • Ambulance Situation Camera 3', group: 'Ambulance & EVP (CAM 05–08)' },
   { id: 'CAM-08', label: 'CAM-08 • Ambulance Situation Camera 4', group: 'Ambulance & EVP (CAM 05–08)' },
-  // ANPR cam 1,2,3,4,5,6,7,8
-  { id: 'CAM-09', label: 'CAM-09 • ANPR Camera 1', group: 'ANPR Tracking (CAM 09–16)' },
-  { id: 'CAM-10', label: 'CAM-10 • ANPR Camera 2', group: 'ANPR Tracking (CAM 09–16)' },
-  { id: 'CAM-11', label: 'CAM-11 • ANPR Camera 3', group: 'ANPR Tracking (CAM 09–16)' },
-  { id: 'CAM-12', label: 'CAM-12 • ANPR Camera 4', group: 'ANPR Tracking (CAM 09–16)' },
-  { id: 'CAM-13', label: 'CAM-13 • ANPR Camera 5', group: 'ANPR Tracking (CAM 09–16)' },
-  { id: 'CAM-14', label: 'CAM-14 • ANPR Camera 6', group: 'ANPR Tracking (CAM 09–16)' },
-  { id: 'CAM-15', label: 'CAM-15 • ANPR Camera 7', group: 'ANPR Tracking (CAM 09–16)' },
-  { id: 'CAM-16', label: 'CAM-16 • ANPR Camera 8', group: 'ANPR Tracking (CAM 09–16)' },
 ];
 
 const DEFAULT_APPROACHES = ['North', 'East', 'South', 'West', 'North-East', 'South-East', 'North-West', 'South-West'];
@@ -77,6 +69,34 @@ export const AddJunctionModal: React.FC<AddJunctionModalProps> = ({
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
+  const generateCameraRows = (type: string, count: number, lat: number, lon: number) => {
+    const isEVP = type === 'EVP_Actuated';
+    const footageOpts = isEVP ? EMERGENCY_FOOTAGE_OPTIONS : NORMAL_FOOTAGE_OPTIONS;
+    const rows: ConfigCamRow[] = [];
+    for (let i = 0; i < count; i++) {
+      const defaultDir = DEFAULT_APPROACHES[i % DEFAULT_APPROACHES.length];
+      let offsetLat = lat;
+      let offsetLon = lon;
+      if (defaultDir === 'North') offsetLat += 0.00035;
+      else if (defaultDir === 'South') offsetLat -= 0.00035;
+      else if (defaultDir === 'East') offsetLon += 0.00035;
+      else if (defaultDir === 'West') offsetLon -= 0.00035;
+
+      const selectedOpt = footageOpts[i % footageOpts.length];
+      const camId = selectedOpt.id;
+      rows.push({
+        id: camId,
+        name: `Camera ${camId} (${defaultDir} Approach)`,
+        direction: defaultDir,
+        videoSource: camId,
+        lat: isNaN(lat) || lat === 0 ? '' : offsetLat.toFixed(6),
+        lon: isNaN(lon) || lon === 0 ? '' : offsetLon.toFixed(6),
+        cameraType: 'CCTV'
+      });
+    }
+    return rows;
+  };
+
   // Initialize or update junction details & fresh approach cameras
   useEffect(() => {
     if (isOpen) {
@@ -88,41 +108,29 @@ export const AddJunctionModal: React.FC<AddJunctionModalProps> = ({
       setJuncLon(initialLon !== undefined && initialLon !== null ? initialLon.toFixed(6) : '');
       setError(null);
 
-      // Generate brand-new isolated camera IDs for this new junction
-      const existingNums = existingCameraIds.map(id => {
-        const match = id.match(/CAM-(\d+)/i);
-        return match ? parseInt(match[1], 10) : 0;
-      });
-      const maxExistingNum = existingNums.length > 0 ? Math.max(...existingNums, 0) : 0;
-      const baseCamIndex = Math.max(maxExistingNum, existingCamerasCount, existingJunctionsCount * 4);
-      const rows: ConfigCamRow[] = [];
-      for (let i = 0; i < numCameras; i++) {
-        const camNum = baseCamIndex + i + 1;
-        const defaultDir = DEFAULT_APPROACHES[i % DEFAULT_APPROACHES.length];
-        let offsetLat = curLat;
-        let offsetLon = curLon;
-        if (defaultDir === 'North') offsetLat += 0.00035;
-        else if (defaultDir === 'South') offsetLat -= 0.00035;
-        else if (defaultDir === 'East') offsetLon += 0.00035;
-        else if (defaultDir === 'West') offsetLon -= 0.00035;
-
-        const camId = `CAM-${String(camNum).padStart(2, '0')}`;
-        rows.push({
-          id: camId,
-          name: `Camera ${camId} (${defaultDir} Approach)`,
-          direction: defaultDir,
-          videoSource: `CAM-${String((i % 4) + 1).padStart(2, '0')}`,
-          lat: initialLat !== undefined && initialLat !== null ? offsetLat.toFixed(6) : '',
-          lon: initialLon !== undefined && initialLon !== null ? offsetLon.toFixed(6) : '',
-          cameraType: 'CCTV'
-        });
-      }
-      setCameraRows(rows);
+      setCameraRows(generateCameraRows(signalType, numCameras, curLat, curLon));
     }
-  }, [isOpen, initialLat, initialLon, existingJunctionsCount, existingCamerasCount, existingCameraIds]);
+  }, [isOpen, initialLat, initialLon, existingJunctionsCount]);
+
+  const handleSignalTypeChange = (newType: string) => {
+    setSignalType(newType);
+    const curLat = parseFloat(juncLat) || 10.7905;
+    const curLon = parseFloat(juncLon) || 78.7047;
+    setCameraRows(generateCameraRows(newType, numCameras, curLat, curLon));
+  };
+
+  const handleNumCamerasChange = (newCount: number) => {
+    setNumCameras(newCount);
+    const curLat = parseFloat(juncLat) || 10.7905;
+    const curLon = parseFloat(juncLon) || 78.7047;
+    setCameraRows(generateCameraRows(signalType, newCount, curLat, curLon));
+  };
 
   // When junction coordinates change, update camera approach offsets around the new center
   useEffect(() => {
+    // Reference props to prevent unused variable warnings
+    void existingCamerasCount;
+    void existingCameraIds;
     if (!isOpen) return;
     const baseLat = parseFloat(juncLat);
     const baseLon = parseFloat(juncLon);
@@ -152,7 +160,14 @@ export const AddJunctionModal: React.FC<AddJunctionModalProps> = ({
   const handleUpdateCamRow = (index: number, field: keyof ConfigCamRow, value: string) => {
     setCameraRows(prev => {
       const updated = [...prev];
-      updated[index] = { ...updated[index], [field]: value };
+      const cur = { ...updated[index], [field]: value };
+      if (field === 'videoSource') {
+        cur.id = value;
+        cur.name = `Camera ${value} (${cur.direction} Approach)`;
+      } else if (field === 'direction') {
+        cur.name = `Camera ${cur.videoSource} (${value} Approach)`;
+      }
+      updated[index] = cur;
       return updated;
     });
   };
@@ -373,7 +388,7 @@ export const AddJunctionModal: React.FC<AddJunctionModalProps> = ({
                 </label>
                 <select
                   value={signalType}
-                  onChange={(e) => setSignalType(e.target.value)}
+                  onChange={(e) => handleSignalTypeChange(e.target.value)}
                   className="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-purple-400"
                 >
                   <option value="Adaptive">Adaptive Dynamic (YOLOv8 + ByteTrack)</option>
@@ -388,7 +403,7 @@ export const AddJunctionModal: React.FC<AddJunctionModalProps> = ({
                 </label>
                 <select
                   value={numCameras}
-                  onChange={(e) => setNumCameras(parseInt(e.target.value, 10))}
+                  onChange={(e) => handleNumCamerasChange(parseInt(e.target.value, 10))}
                   className="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-purple-400"
                 >
                   <option value={1}>1 Camera (Single Leg)</option>
@@ -459,7 +474,7 @@ export const AddJunctionModal: React.FC<AddJunctionModalProps> = ({
                         onChange={(e) => handleUpdateCamRow(idx, 'videoSource', e.target.value)}
                         className="w-full bg-black/60 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-cyan-400"
                       >
-                        {FOOTAGE_OPTIONS.map(opt => (
+                        {(signalType === 'EVP_Actuated' ? EMERGENCY_FOOTAGE_OPTIONS : NORMAL_FOOTAGE_OPTIONS).map(opt => (
                           <option key={opt.id} value={opt.id}>{opt.label}</option>
                         ))}
                       </select>
