@@ -44,6 +44,12 @@ RAW_CAMERA_APPROACH_DEFS = [
     ("camera_04", "CAM-04", "West Approach"),
 ]
 
+CAMERA_APPROACHES = {
+    fname: {"display": disp, "approach": appr}
+    for fname, disp, appr in RAW_CAMERA_APPROACH_DEFS
+}
+
+
 
 class TrafficIQTerminalRunner:
     """
@@ -324,7 +330,7 @@ class TrafficIQTerminalRunner:
 
         mode = signal_status.get("mode", "NORMAL")
         curr_app = signal_status.get("current_approach", "camera_01")
-        curr_meta = CAMERA_APPROACHES.get(curr_app, {"display": curr_app, "approach": curr_app})
+        curr_meta = self.camera_approaches.get(curr_app, CAMERA_APPROACHES.get(curr_app, {"display": curr_app, "approach": curr_app}))
         curr_disp = curr_meta["display"]
         curr_phase = signal_status.get("current_phase", "GREEN")
         remaining = signal_status.get("time_remaining", 0.0)
@@ -336,8 +342,9 @@ class TrafficIQTerminalRunner:
             lines.append(f"{'🚨 EMERGENCY PRIORITY ACTIVE':^68}")
             lines.append("-" * 68)
             emb_app = signal_status.get("emergency_approach") or (active_emergency_cams[0] if active_emergency_cams else "UNKNOWN")
-            emb_disp = CAMERA_APPROACHES.get(emb_app, {}).get("display", emb_app)
-            emb_name = CAMERA_APPROACHES.get(emb_app, {}).get("approach", emb_app)
+            emb_meta = self.camera_approaches.get(emb_app, CAMERA_APPROACHES.get(emb_app, {}))
+            emb_disp = emb_meta.get("display", emb_app)
+            emb_name = emb_meta.get("approach", emb_app)
 
             lines.append(f"Ambulance Detected: {emb_disp} ({emb_name})")
             if mode == "PREEMPTION_CLEARING":
@@ -361,7 +368,7 @@ class TrafficIQTerminalRunner:
             lines.append("")
 
         lines.append("Approach Status:")
-        for cam_id, meta in CAMERA_APPROACHES.items():
+        for cam_id, meta in self.camera_approaches.items():
             sig = signals.get(cam_id, "RED")
             note = ""
             if sig == "GREEN" and mode == "EMERGENCY_HOLD" and cam_id == signal_status.get("emergency_approach"):
